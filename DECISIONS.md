@@ -71,14 +71,17 @@ Le regroupement des réindexations n'a plus d'objet : chaque lot réindexe libre
 
 ## D4 — Qualité contre latence : re-ranking désactivé par défaut
 
-**Décision.** Objectif indicatif : une réponse en moins de 15 s. Le re-ranking est **désactivé par défaut** et activable dans les réglages. La mesure de qualité doit être reproductible par quiconque dispose d'Ollama.
+**Décision.** ~~Objectif indicatif : une réponse en moins de 15 s.~~ *(révisé pendant le lot 1b)* L'objectif devient un **budget en tokens de prompt** par question, indépendant de la machine ; le temps de réponse mesuré est **seulement indicatif** : le traitement du prompt domine la latence sur CPU et varie fortement avec la taille du prompt, un seuil en secondes n'a donc de sens que pour une machine donnée. Le script de mesure enregistre pour chaque question `prompt_eval_count`, `prompt_eval_duration` et `eval_duration` (renvoyés par Ollama), en plus du temps total. La valeur du budget sera fixée au lot 7, avec `NUM_CTX` (D3), à partir de ces mesures. Le re-ranking est **désactivé par défaut** et activable dans les réglages. La mesure de qualité doit être reproductible par quiconque dispose d'Ollama.
+
+**Mise à jour (fin du lot 1b).** Le lot 1b livre **l'outil de mesure** (corpus, questions, `eval/run_eval.py`, dont le mode `--retrieval-only`), pas la mesure de référence. Celle-ci reste **à produire sur une machine disposant d'Ollama**, selon la procédure de `eval/README.md` (`v1-legacy` d'abord, puis la branche courante). En attendant, **les lots 6 à 9 se valident par leurs tests et leurs `xfail`** ; la comparaison chiffrée avant/après leur sera ajoutée dès que la référence existera. Le re-ranking activé n'est pas mesurable tant que S1 (timeout inopérant) n'est pas corrigé au lot 8.
 
 **Impact sur le plan.**
 - **Lot 1b (nouveau, « Mesure de qualité »)**, placé après le lot 1 (correction C4) :
   - corpus de test fictif versionné dans `eval/corpus/` : PDF texte, DOCX avec tableau, e-mail `.eml`, image pour l'OCR, Markdown avec listes et tableau, et deux `facture.pdf` homonymes dans deux sous-dossiers ;
   - `eval/questions.yaml` : **15 questions**, chacune avec sa réponse attendue et sa ou ses sources attendues. Elles seront proposées dans la PR du lot 1b, pour validation ;
   - `eval/run_eval.py`, hors pytest et nécessitant Ollama : latence (p50/p95), source attendue retrouvée, éléments clés présents dans la réponse, citations valides ;
-  - **mesure de référence** sur `v1-legacy`, enregistrée avec la machine et les modèles utilisés, puis nouvelle mesure après les lots 6, 7 et 8.
+  - mode `--retrieval-only` (rang des sources attendues, recall@k, sans génération) et métriques de citation (source attendue citée, F3) ;
+  - **mesure de référence** sur `v1-legacy`, enregistrée avec la machine et les modèles utilisés, puis nouvelle mesure après les lots 6, 7 et 8 : **à produire hors de ce dépôt de travail, sur une machine avec Ollama** (voir ci-dessus).
 - **Lot 8** : `RERANKING_ENABLED=false` par défaut ; interrupteur dans les réglages (persisté via le lot 7b) ; vrai timeout ; plafond de candidats ; mesure avec et sans re-ranking.
 
 ## D5 — Fichiers homonymes : `source` = chemin relatif
@@ -175,7 +178,7 @@ Le lot 5 ne commence pas tant que **le lot 4b n'est pas fusionné dans `modernis
 | Docker Desktop et Ollama sur `127.0.0.1` | Lot 2b | À vérifier sur Mac **et** Windows (je n'ai que Linux). Si cela échoue, documenter l'alternative pour ces plateformes. |
 | Valeur par défaut de `NUM_CTX` | Lot 7 | 4096 proposé ; à confirmer par une mesure du lot 1b. |
 | 15 questions de référence | Lot 1b | Proposées dans la PR, à valider. |
-| Seuil de 15 s | Lot 8 | Dépend de la machine. La mesure de référence indiquera la machine utilisée. |
+| Budget en tokens de prompt (remplace le seuil de 15 s) | Lots 7 et 8 | Valeur à fixer d'après les champs `prompt_eval_*` du lot 1b ; le temps mesuré reste indicatif. |
 
 ## Évolutions futures (hors plan)
 

@@ -173,8 +173,8 @@ Vérification du 15/10/2026. « Transitif » = version effectivement résolue pa
 | F20 | Basse | `main.py:126-133` | Une exception d'indexation renvoie HTTP **200** avec `success:false`, contre 400 pour l'autre chemin d'erreur. Les tests figent ce comportement (`test_api.py:224-232`). |
 | F21 | Basse | `index.html:1191-1215` | Barre de progression simulée (aléatoire). « Suspendre » coupe la requête côté navigateur mais l'indexation continue sur le serveur. |
 | F22 | Info | `main.py:50` ; `index.html` | `QueryRequest.image_data` n'est jamais utilisé. Les « conversations » n'envoient pas l'historique : chaque question est traitée isolément. |
-| F23 | Basse | `document_loader.py:358-359` | E-mails : l'en-tête `Subject` encodé (RFC 2047, par exemple `=?utf-8?q?D=C3=AEner?=`) est recopié tel quel dans « Sujet: » : `msg['subject']` n'est pas décodé. *Repéré au lot 1, non corrigé.* |
-| F24 | Moyenne | `document_loader.py:337-342` | Fichiers texte : `chardet` classe en ISO-8859-1 (confiance 0,73) un fichier UTF-8 court qui contient peu de caractères accentués, et « à » devient « Ã  » dans l'index. Vérifié avec la version installée (`Bonjour à tous, voici une note.`). *Repéré au lot 1, non corrigé.* |
+| F23 | Basse | `document_loader.py:358-359` | E-mails : l'en-tête `Subject` encodé (RFC 2047, par exemple `=?utf-8?q?D=C3=AEner?=`) est recopié tel quel dans « Sujet: » : `msg['subject']` n'est pas décodé. *Repéré au lot 1, non corrigé ; corrigé au lot 11 (`xfail` : `test_loader.py::test_eml_encoded_subject_is_decoded`).* |
+| F24 | **Haute** | `document_loader.py:337-342` | Fichiers texte : `chardet` classe en ISO-8859-1 (confiance 0,73) un fichier UTF-8 court qui contient peu de caractères accentués, et « à » devient « Ã  » dans l'index. Vérifié avec la version installée (`Bonjour à tous, voici une note.`). Gravité relevée : pour un corpus majoritairement français, la corruption des accents dégrade directement la recherche. *Repéré au lot 1, non corrigé ; corrigé au lot 11 (`xfail` : `test_loader.py::test_txt_short_utf8_is_not_misdetected_as_latin1`).* |
 
 ### 3.3 Performance
 
@@ -292,7 +292,7 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 | Lot | Branche | Objet | Prérequis | Effort |
 |---|---|---|---|---|
 | 1 ✅ | `lot-1` | Tests qui protègent le comportement actuel | — | 1 session |
-| 1b | `lot-1b` | Corpus de test, 15 questions, script de mesure, référence `v1-legacy` | 1 | 1 session |
+| 1b ✅ | `lot-1b` | Corpus de test, 15 questions, script de mesure (la référence `v1-legacy` reste à produire, voir point ouvert) | 1 | 1 session |
 | 2 | `lot-2` | Dépendances mortes, configuration, entrypoint, **plus de suppression automatique d'index** | 1 | 1–2 h |
 | 2b | `lot-2b` | Réseau local par défaut, override Linux (SEC13, SEC4) | 2 | 1–2 h |
 | 3 | `lot-3` | pypdf, Pillow, jinja2, python-docx, psutil | 2 | 1 h |
@@ -305,7 +305,7 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 | 8 | `lot-8` | Re-ranking désactivé par défaut, timeout réel (S1, S3, P1) | 7, 7b | 1 session |
 | 9 | `lot-9` | F1, **F7**, S2, S4, S5, P2 | 4b, 5 | 1–2 sessions |
 | 10 | `lot-10` | SEC3, SEC5, SEC7, SEC9, S7, F11, F20 | 4 | 1 session |
-| 11 | `lot-11` | F15, F16 (tableaux DOCX), F17, F18 ; OCR des PDF scannés documenté comme option | 9 | 1 session |
+| 11 | `lot-11` | F15, F16 (tableaux DOCX), F17, F18, **F23, F24** ; OCR des PDF scannés documenté comme option | 9 | 1 session |
 | 12 | `lot-12` | Documentation, progression réelle, Alpine, CSS Tailwind (optionnel) | — | variable |
 
 ### Lot 1 — Filet de sécurité : tests de caractérisation *(aucun changement de code applicatif)* ✅ Fait
@@ -316,7 +316,7 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 - **Contrat API ↔ moteur** : quelques tests de bout en bout sur un vrai `RAGEngine` avec les faux modèles.
 - *Fini quand* : tous les tests passent sur `v1-legacy`, sans réseau, en moins de 30 s.
 
-**Résultat (lot 1).** `.venv/bin/python -m pytest -q` : 139 tests passent et 9 `xfail(strict=True)` échouent comme prévu, en environ 3 s. La suite passe aussi sur le tag `v1-legacy` (`app/` est inchangé). Une garde dans `conftest.py` refuse toute connexion sortante. `requirements-dev.txt` contient `pytest==9.1.1` seul (version vérifiée sur PyPI).
+**Résultat (lot 1).** `.venv/bin/python -m pytest -q` : 139 tests passent et 11 `xfail(strict=True)` échouent comme prévu, en environ 3 s. La suite passe aussi sur le tag `v1-legacy` (`app/` est inchangé). Une garde dans `conftest.py` refuse toute connexion sortante. `requirements-dev.txt` contient `pytest==9.1.1` seul (version vérifiée sur PyPI).
 
 Chaque `xfail` devient un test normal dans le lot indiqué, qui retire alors le marqueur (`xfail_strict` fait échouer la suite sinon) :
 
@@ -329,15 +329,19 @@ Chaque `xfail` devient un test normal dans le lot indiqué, qui retire alors le 
 | `test_engine_query.py::test_each_extract_is_prefixed_with_its_source` | F3 | — | 7 |
 | `test_engine_query.py::test_selected_source_is_found_wherever_it_ranks` | F5 | — | 7 |
 | `test_loader.py::test_source_is_the_relative_path` | F7 | D5 | 9 |
+| `test_loader.py::test_eml_encoded_subject_is_decoded` | F23 | — | 11 |
+| `test_loader.py::test_txt_short_utf8_is_not_misdetected_as_latin1` | F24 | — | 11 |
 | `test_engine_index.py::test_selective_indexing_adds_to_the_existing_index` | F1 | D1 | 9 |
 
 Les tests de caractérisation qui figent un comportement corrigé plus tard portent la mention du constat et du lot dans leur docstring (F6, F7, F8, F13, F14, F15, F16, F17, F18, F19). Les lots concernés les mettent à jour explicitement.
 
-### Lot 1b — Mesure de qualité reproductible *(nouveau, D4)*
-- `eval/corpus/` : documents fictifs versionnés (PDF texte, DOCX avec tableau, `.eml`, image pour l'OCR, Markdown avec listes et tableau, deux `facture.pdf` homonymes dans deux sous-dossiers).
+### Lot 1b — Mesure de qualité reproductible *(nouveau, D4)* ✅ Fait (outil livré)
+- `eval/corpus/` : documents fictifs versionnés (PDF texte, DOCX avec tableau, `.eml`, image pour l'OCR, Markdown avec listes et tableau, deux `facture.pdf` homonymes dans deux sous-dossiers) et 48 documents distracteurs (`distracteurs/`), pour dépasser 4 × `top_k` extraits indexés.
 - `eval/questions.yaml` : 15 questions avec réponse et source(s) attendues, proposées dans la PR pour validation.
-- `eval/run_eval.py` (hors pytest, Ollama requis) : latence p50/p95, source attendue retrouvée, éléments clés présents dans la réponse, citations valides.
-- Mesure de référence sur `v1-legacy`, enregistrée avec la machine et les modèles utilisés.
+- `eval/run_eval.py` (hors pytest, Ollama requis) : latence p50/p95, source attendue retrouvée, éléments clés présents dans la réponse, citations valides, source attendue citée (F3). Mode `--retrieval-only` : rang des sources attendues et recall@k, sans génération.
+- `tests/test_eval.py` : tests de la partie sans Ollama (corpus, éléments clés, abstention, recall@k, citations).
+- Le re-ranking activé n'est pas mesurable tant que S1 n'est pas corrigé (lot 8) ; le script le signale.
+- **Point ouvert — mesure de référence non produite.** Aucune mesure n'a été exécutée pendant ce lot. Elle reste à produire sur une machine disposant d'Ollama (`v1-legacy` puis branche courante, procédure dans `eval/README.md`) et à ranger dans `eval/results/v1-legacy*.json`. En attendant, les lots 6 à 9 se valident par leurs tests et leurs `xfail` (DECISIONS.md, D4).
 
 ### Lot 2 — Hygiène sans risque
 - Retirer `python-multipart`, `aiofiles`, `python-magic`, `libmagic1` et `poppler-utils` (D9).
@@ -384,7 +388,7 @@ Les tests de caractérisation qui figent un comportement corrigé plus tard port
 ### Lot 8 — Re-ranking maîtrisé
 - `RERANKING_ENABLED=false` par défaut, interrupteur dans les réglages (persisté via 7b).
 - Vrai timeout (côté `ChatOllama`/httpx), plafond de candidats, timeout sur la génération (S1, S3, P1).
-- Mesure via le lot 1b, avec et sans re-ranking, au regard de l'objectif indicatif de 15 s.
+- Mesure via le lot 1b, avec et sans re-ranking, au regard du budget en tokens de prompt (D4, révisé ; le temps mesuré reste indicatif).
 
 ### Lot 9 — Index incrémental et robuste
 - Indexation **incrémentale** : cocher des fichiers les ajoute ou remplace leurs chunks, sans jamais effacer le reste (F1, D1) ; suppression des fichiers disparus.
@@ -397,6 +401,7 @@ Les tests de caractérisation qui figent un comportement corrigé plus tard port
 
 ### Lot 11 — Ingestion
 - E-mails HTML et charsets inconnus (F15), tableaux DOCX (F16), dates normalisées et classification (F17), journalisation et factorisation de `load_all`/`load_specific` (F18).
+- **F23** *(repéré au lot 1)* : décoder l'en-tête `Subject` encodé (RFC 2047). **F24** *(repéré au lot 1, gravité Haute)* : détection d'encodage des fichiers texte (essayer UTF-8 strict avant `chardet`). Les deux `xfail` du lot 1 passent alors au vert.
 - OCR de repli pour les PDF scannés : **décrit comme option, non implémenté** (D9).
 
 ### Lot 12 — Finitions *(optionnel)*

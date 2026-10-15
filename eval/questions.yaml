@@ -18,7 +18,7 @@
   category: pdf
   question: À quelle date le contrat d'assurance habitation arrive-t-il à échéance ?
   expected_answer: 31 décembre 2025
-  key_elements: ["31 decembre 2025"]
+  key_elements: [["31 decembre 2025", "31/12/2025"]]
   expected_sources: [assurance/contrat_habitation.pdf]
 
 - id: 3
@@ -106,7 +106,7 @@
   category: multi-sources
   question: Quelle facture est la plus élevée, celle d'EDF ou celle du garage ?
   expected_answer: celle du garage (342,00 contre 87,40 euros)
-  key_elements: ["garage"]
+  key_elements: ["garage", "342"]
   expected_sources: [edf/facture.pdf, garage/facture.pdf]
 
 - id: 15

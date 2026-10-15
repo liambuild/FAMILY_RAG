@@ -2,6 +2,7 @@
 
     .venv/bin/python eval/run_eval.py --label lot-1b --llm gemma3:4b
     .venv/bin/python eval/run_eval.py --label v1-legacy --app-dir /chemin/vers/worktree/app
+    .venv/bin/python eval/run_eval.py --label lot-1b-retrieval --retrieval-only   # sans génération
     .venv/bin/python eval/run_eval.py --compare eval/results/a.json eval/results/b.json
 
 L'index est construit dans un dossier temporaire supprimé en fin de run : l'index de
@@ -60,10 +61,36 @@ def source_matches(retrieved: str, expected: str) -> bool:
     return retrieved == expected or ("/" not in retrieved and retrieved == Path(expected).name)
 
 
-def grade(question: dict, answer: str, sources: list[str]) -> dict:
-    """Notes d'une réponse. Les listes `sources` et la réponse sont celles du moteur."""
+def is_abstention(answer: str) -> bool:
+    """La réponse avoue-t-elle ne pas savoir ? Détection par formules (ABSTENTION), insensible à la casse et aux accents."""
+    normalized_answer = normalize(answer)
+    return any(marker in normalized_answer for marker in ABSTENTION)
+
+
+def grade_retrieval(question: dict, sources: list[str]) -> dict:
+    """Notes de la seule recherche. `sources` : sources des extraits retrouvés, dans l'ordre (les top_k premiers).
+
+    `recall_at_k` : part des sources attendues retrouvées parmi ces extraits (None si aucune n'est attendue).
+    """
     expected = question.get("expected_sources", [])
     ranks = [next((i + 1 for i, s in enumerate(sources) if source_matches(s, e)), None) for e in expected]
+    return {
+        "source_ranks": ranks,
+        "source_hit": all(r is not None for r in ranks) if expected else None,
+        "recall_at_k": sum(r is not None for r in ranks) / len(expected) if expected else None,
+    }
+
+
+def cites_expected_source(question: dict, cited: list[str]) -> bool | None:
+    """F3 : la réponse cite-t-elle au moins une des sources attendues ? None si la question n'en attend aucune."""
+    expected = question.get("expected_sources", [])
+    if not expected:
+        return None
+    return any(source_matches(c, e) for c in cited for e in expected)
+
+
+def grade(question: dict, answer: str, sources: list[str]) -> dict:
+    """Notes d'une réponse. Les listes `sources` et la réponse sont celles du moteur."""
     normalized_answer = normalize(answer)
 
     elements = question.get("key_elements", [])
@@ -75,15 +102,15 @@ def grade(question: dict, answer: str, sources: list[str]) -> dict:
     cited = sorted({m.group(0) for m in CITATION.finditer(answer)})
     retrieved_names = {Path(s).name for s in sources}
     result = {
-        "source_ranks": ranks,
-        "source_hit": all(r is not None for r in ranks) if expected else None,
+        **grade_retrieval(question, sources),
         "key_elements_found": found,
         "key_elements_total": len(elements),
         "cited_files": cited,
         "citations_valid": all(Path(c).name in retrieved_names for c in cited) if cited else None,
+        "cites_expected_source": cites_expected_source(question, cited),
     }
     if question.get("abstain"):
-        result["abstained"] = any(marker in normalized_answer for marker in ABSTENTION)
+        result["abstained"] = is_abstention(answer)
     return result
 
 
@@ -103,6 +130,7 @@ def summarize(rows: list[dict]) -> dict:
         with_elements = [r for r in measured if r["key_elements_total"]]
         cited = [r for r in measured if r["citations_valid"] is not None]
         abstain = [r for r in measured if "abstained" in r]
+        expecting = [r for r in measured if r.get("cites_expected_source") is not None]
 
         def rate(items: list[dict], test) -> str | None:
             return f"{sum(1 for r in items if test(r))}/{len(items)}" if items else None
@@ -120,10 +148,31 @@ def summarize(rows: list[dict]) -> dict:
             "key_elements_complete": rate(with_elements, lambda r: r["key_elements_found"] == r["key_elements_total"]),
             "answers_with_citation": rate(measured, lambda r: r["cited_files"]),
             "citations_valid": rate(cited, lambda r: r["citations_valid"]),
+            "cites_expected_source": rate(expecting, lambda r: r["cites_expected_source"]),
             "good_abstentions": rate(abstain, lambda r: r["abstained"]),
         }
 
     return {"all": block(rows), "without_known_gaps": block([r for r in rows if not r.get("known_gap")])}
+
+
+def summarize_retrieval(rows: list[dict]) -> dict:
+    """Agrégats du mode --retrieval-only : recall@k moyen et sources attendues toutes retrouvées."""
+    def block(subset: list[dict]) -> dict:
+        measured = [r for r in subset if not r.get("skipped") and r["recall_at_k"] is not None]
+        return {
+            "questions": len(measured),
+            "recall_at_k": round(statistics.mean(r["recall_at_k"] for r in measured), 3) if measured else None,
+            "source_found": f"{sum(1 for r in measured if r['source_hit'])}/{len(measured)}" if measured else None,
+            "search_p50_s": percentile([r["latency_s"] for r in measured], 0.5),
+        }
+
+    return {"all": block(rows), "without_known_gaps": block([r for r in rows if not r.get("known_gap")])}
+
+
+def retrieve(engine, question: str, k: int) -> list[str]:
+    """Sources des k extraits les plus proches, sans re-ranking ni génération (même recherche que RAGEngine.query)."""
+    found = engine.vectorstore.similarity_search_with_score(question, k=k)
+    return [doc.metadata.get("source", "") for doc, _ in found]
 
 
 USAGE_FIELDS = ("prompt_eval_count", "prompt_eval_duration", "eval_count", "eval_duration")
@@ -210,13 +259,21 @@ def run(args: argparse.Namespace) -> dict:
     if args.only:
         questions = [q for q in questions if q["id"] in args.only]
 
+    if args.rerank != "off" and not args.retrieval_only:
+        print("Attention : le timeout du re-ranking est inopérant (AUDIT.md S1, corrigé au lot 8) ; un Ollama lent "
+              "peut bloquer une question sans limite. Mesure avec re-ranking à ne pas exploiter avant le lot 8.",
+              file=sys.stderr)
+
     base_url = f"http://{args.ollama_host}"
-    infos = ollama_checks(base_url, [args.llm, args.embedding])
+    # Sans génération, seul le modèle d'embedding est nécessaire
+    infos = ollama_checks(base_url, [args.embedding] if args.retrieval_only else [args.llm, args.embedding])
 
     origin = Path.cwd()
     with tempfile.TemporaryDirectory(prefix="family-rag-eval-") as index_dir:
         os.environ.update(OLLAMA_HOST=args.ollama_host, EMBEDDING_MODEL=args.embedding, LLM_MODEL=args.llm,
                           DATA_DIR=str(EVAL_DIR / "corpus"), INDEX_DIR=index_dir)
+        if args.top_k:
+            os.environ["TOP_K"] = str(args.top_k)
         sys.path.insert(0, str(app_dir))
         os.chdir(index_dir)  # un éventuel .env du dossier courant ne doit pas s'appliquer
         logging.disable(logging.INFO)
@@ -226,7 +283,8 @@ def run(args: argparse.Namespace) -> dict:
         settings = get_settings()
         engine = RAGEngine()
         usage = UsageCollector()
-        engine.llm.callbacks = [usage.handler]
+        if engine.llm:
+            engine.llm.callbacks = [usage.handler]
 
         started = time.perf_counter()
         indexing = engine.index_documents()
@@ -235,13 +293,29 @@ def run(args: argparse.Namespace) -> dict:
             sys.exit(f"Indexation échouée : {indexing}")
         print(f"Indexation : {indexing.get('documents')} documents, {indexing.get('chunks')} chunks, {index_s} s", file=sys.stderr)
 
-        started = time.perf_counter()
-        # Charge le modèle en mémoire sans rien générer (prompt vide) : exclu des latences mesurées
-        httpx.post(f"{base_url}/api/generate", json={"model": args.llm, "prompt": "", "keep_alive": "30m"}, timeout=1800)
-        warmup_s = round(time.perf_counter() - started, 1)
-
-        modes = {"off": [False], "on": [True], "both": [False, True]}[args.rerank]
         results = {}
+        warmup_s = None
+        if args.retrieval_only:
+            rows = []
+            for question in questions:
+                row = {"id": question["id"], "category": question["category"], "question": question["question"],
+                       "known_gap": question.get("known_gap")}
+                started = time.perf_counter()
+                sources = retrieve(engine, question["question"], settings.top_k)
+                row.update(latency_s=round(time.perf_counter() - started, 3), sources=sources,
+                           **grade_retrieval(question, sources))
+                rows.append(row)
+                print(f"[retrieval] Q{question['id']:>2} rangs={row['source_ranks']}  recall@{settings.top_k}={row['recall_at_k']}",
+                      file=sys.stderr)
+            results["retrieval"] = {"questions": rows, "summary": summarize_retrieval(rows)}
+
+        started = time.perf_counter()
+        if not args.retrieval_only:
+            # Charge le modèle en mémoire sans rien générer (prompt vide) : exclu des latences mesurées
+            httpx.post(f"{base_url}/api/generate", json={"model": args.llm, "prompt": "", "keep_alive": "30m"}, timeout=1800)
+            warmup_s = round(time.perf_counter() - started, 1)
+
+        modes = [] if args.retrieval_only else {"off": [False], "on": [True], "both": [False, True]}[args.rerank]
         for rerank in modes:
             name = "rerank_on" if rerank else "rerank_off"
             rows = []
@@ -271,7 +345,8 @@ def run(args: argparse.Namespace) -> dict:
             "label": args.label, "date": datetime.now().isoformat(timespec="seconds"),
             "code": command_output("git", "-C", str(app_dir), "describe", "--tags", "--always", "--dirty"),
             "app_dir": str(app_dir), "machine": machine_info(), **infos,
-            "llm": settings.llm_model, "embedding": settings.embedding_model,
+            "llm": None if args.retrieval_only else settings.llm_model, "embedding": settings.embedding_model,
+            "retrieval_only": args.retrieval_only,
             "parameters": {"top_k": settings.top_k, "temperature": settings.temperature,
                            "chunk_size": settings.chunk_size, "chunk_overlap": settings.chunk_overlap},
             "index": {"documents": indexing.get("documents"), "chunks": indexing.get("chunks"), "seconds": index_s},
@@ -279,6 +354,7 @@ def run(args: argparse.Namespace) -> dict:
             "note": args.note,
             "source_matching": "chemin relatif exact ; nom de base si le moteur ne renvoie que des noms (v1-legacy)",
             "heuristics": "citations = noms de fichiers cités dans la réponse ; abstention = formules d'aveu d'ignorance",
+            "rerank_note": "re-ranking activé non mesurable avant la correction de S1 (lot 8)",
         }
     return {"meta": meta, "results": results}
 
@@ -291,7 +367,8 @@ def merge_into(path: Path, report: dict) -> dict:
         new_ids = {r["id"] for r in data["questions"]}
         rows = [r for r in previous["results"][mode]["questions"] if r["id"] not in new_ids] + data["questions"]
         rows.sort(key=lambda r: r["id"])
-        previous["results"][mode] = {"questions": rows, "summary": summarize(rows)}
+        previous["results"][mode] = {"questions": rows,
+                                     "summary": summarize_retrieval(rows) if mode == "retrieval" else summarize(rows)}
     previous["meta"].setdefault("remeasured", []).append({
         "questions": sorted(new_ids), "date": report["meta"]["date"], "index": report["meta"]["index"],
         "code": report["meta"]["code"], "tesseract": bool(shutil.which("tesseract")),
@@ -302,7 +379,7 @@ def merge_into(path: Path, report: dict) -> dict:
 
 def print_report(report: dict) -> None:
     meta = report["meta"]
-    print(f"\n== {meta['label']} — {meta['code']} — {meta['llm']} / {meta['embedding']} — "
+    print(f"\n== {meta['label']} — {meta['code']} — {meta['llm'] or 'sans LLM'} / {meta['embedding']} — "
           f"{meta['machine']['cores']} cœurs, {meta['machine']['ram']}, GPU : {meta['machine']['gpu']}")
     for mode, data in report["results"].items():
         print(f"\n[{mode}]")
@@ -323,8 +400,9 @@ def compare(path_a: str, path_b: str) -> None:
             other = rows_b.get(row["id"])
             if not other or row.get("skipped") or other.get("skipped"):
                 continue
-            changes = [f"{k}: {row[k]} → {other[k]}" for k in ("source_hit", "key_elements_found", "citations_valid")
-                       if row[k] != other[k]]
+            changes = [f"{k}: {row.get(k)} → {other.get(k)}"
+                       for k in ("source_hit", "key_elements_found", "citations_valid", "cites_expected_source")
+                       if row.get(k) != other.get(k)]
             if changes:
                 print(f"  Q{row['id']:>2} {'; '.join(changes)}")
 
@@ -337,10 +415,14 @@ def main() -> None:
     parser.add_argument("--embedding", default=os.environ.get("EMBEDDING_MODEL", "nomic-embed-text"))
     parser.add_argument("--ollama-host", default=os.environ.get("OLLAMA_HOST", "127.0.0.1:11434"))
     parser.add_argument("--rerank", choices=["off", "on", "both"], default="off")
+    parser.add_argument("--retrieval-only", action="store_true",
+                        help="mesure seulement la recherche (rang des sources attendues, recall@k) : ni génération ni LLM, "
+                             "seul le modèle d'embedding est requis")
+    parser.add_argument("--top-k", type=int, help="nombre d'extraits retrouvés (défaut : réglage TOP_K de l'application)")
     parser.add_argument("--only", type=int, nargs="+", help="numéros de questions à poser")
     parser.add_argument("--merge", action="store_true",
                         help="avec --only : remplace ces questions dans le fichier de sortie existant au lieu de l'écraser")
-    parser.add_argument("--note", default="", help="remarque libre enregistrée dans meta (contraintes de la machine, etc.)")
+    parser.add_argument("--note", default="", help="remarque libre enregistrée dans meta")
     parser.add_argument("--output", help="fichier JSON (défaut : eval/results/<label>.json)")
     parser.add_argument("--compare", nargs=2, metavar=("A.json", "B.json"), help="compare deux mesures et quitte")
     args = parser.parse_args()

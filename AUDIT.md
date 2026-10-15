@@ -292,7 +292,7 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 | Lot | Branche | Objet | Prérequis | Effort |
 |---|---|---|---|---|
 | 1 ✅ | `lot-1` | Tests qui protègent le comportement actuel | — | 1 session |
-| 1b | `lot-1b` | Corpus de test, 15 questions, script de mesure, référence `v1-legacy` | 1 | 1 session |
+| 1b ✅ | `lot-1b` | Corpus de test, 15 questions, script de mesure (la référence `v1-legacy` reste à produire, voir point ouvert) | 1 | 1 session |
 | 2 | `lot-2` | Dépendances mortes, configuration, entrypoint, **plus de suppression automatique d'index** | 1 | 1–2 h |
 | 2b | `lot-2b` | Réseau local par défaut, override Linux (SEC13, SEC4) | 2 | 1–2 h |
 | 3 | `lot-3` | pypdf, Pillow, jinja2, python-docx, psutil | 2 | 1 h |
@@ -335,11 +335,13 @@ Chaque `xfail` devient un test normal dans le lot indiqué, qui retire alors le 
 
 Les tests de caractérisation qui figent un comportement corrigé plus tard portent la mention du constat et du lot dans leur docstring (F6, F7, F8, F13, F14, F15, F16, F17, F18, F19). Les lots concernés les mettent à jour explicitement.
 
-### Lot 1b — Mesure de qualité reproductible *(nouveau, D4)*
-- `eval/corpus/` : documents fictifs versionnés (PDF texte, DOCX avec tableau, `.eml`, image pour l'OCR, Markdown avec listes et tableau, deux `facture.pdf` homonymes dans deux sous-dossiers).
+### Lot 1b — Mesure de qualité reproductible *(nouveau, D4)* ✅ Fait (outil livré)
+- `eval/corpus/` : documents fictifs versionnés (PDF texte, DOCX avec tableau, `.eml`, image pour l'OCR, Markdown avec listes et tableau, deux `facture.pdf` homonymes dans deux sous-dossiers) et 48 documents distracteurs (`distracteurs/`), pour dépasser 4 × `top_k` extraits indexés.
 - `eval/questions.yaml` : 15 questions avec réponse et source(s) attendues, proposées dans la PR pour validation.
-- `eval/run_eval.py` (hors pytest, Ollama requis) : latence p50/p95, source attendue retrouvée, éléments clés présents dans la réponse, citations valides.
-- Mesure de référence sur `v1-legacy`, enregistrée avec la machine et les modèles utilisés.
+- `eval/run_eval.py` (hors pytest, Ollama requis) : latence p50/p95, source attendue retrouvée, éléments clés présents dans la réponse, citations valides, source attendue citée (F3). Mode `--retrieval-only` : rang des sources attendues et recall@k, sans génération.
+- `tests/test_eval.py` : tests de la partie sans Ollama (corpus, éléments clés, abstention, recall@k, citations).
+- Le re-ranking activé n'est pas mesurable tant que S1 n'est pas corrigé (lot 8) ; le script le signale.
+- **Point ouvert — mesure de référence non produite.** Aucune mesure n'a été exécutée pendant ce lot. Elle reste à produire sur une machine disposant d'Ollama (`v1-legacy` puis branche courante, procédure dans `eval/README.md`) et à ranger dans `eval/results/v1-legacy*.json`. En attendant, les lots 6 à 9 se valident par leurs tests et leurs `xfail` (DECISIONS.md, D4).
 
 ### Lot 2 — Hygiène sans risque
 - Retirer `python-multipart`, `aiofiles`, `python-magic`, `libmagic1` et `poppler-utils` (D9).

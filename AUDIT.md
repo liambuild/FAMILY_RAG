@@ -173,8 +173,8 @@ Vérification du 15/10/2026. « Transitif » = version effectivement résolue pa
 | F20 | Basse | `main.py:126-133` | Une exception d'indexation renvoie HTTP **200** avec `success:false`, contre 400 pour l'autre chemin d'erreur. Les tests figent ce comportement (`test_api.py:224-232`). |
 | F21 | Basse | `index.html:1191-1215` | Barre de progression simulée (aléatoire). « Suspendre » coupe la requête côté navigateur mais l'indexation continue sur le serveur. |
 | F22 | Info | `main.py:50` ; `index.html` | `QueryRequest.image_data` n'est jamais utilisé. Les « conversations » n'envoient pas l'historique : chaque question est traitée isolément. |
-| F23 | Basse | `document_loader.py:358-359` | E-mails : l'en-tête `Subject` encodé (RFC 2047, par exemple `=?utf-8?q?D=C3=AEner?=`) est recopié tel quel dans « Sujet: » : `msg['subject']` n'est pas décodé. *Repéré au lot 1, non corrigé.* |
-| F24 | Moyenne | `document_loader.py:337-342` | Fichiers texte : `chardet` classe en ISO-8859-1 (confiance 0,73) un fichier UTF-8 court qui contient peu de caractères accentués, et « à » devient « Ã  » dans l'index. Vérifié avec la version installée (`Bonjour à tous, voici une note.`). *Repéré au lot 1, non corrigé.* |
+| F23 | Basse | `document_loader.py:358-359` | E-mails : l'en-tête `Subject` encodé (RFC 2047, par exemple `=?utf-8?q?D=C3=AEner?=`) est recopié tel quel dans « Sujet: » : `msg['subject']` n'est pas décodé. *Repéré au lot 1, non corrigé ; corrigé au lot 11 (`xfail` : `test_loader.py::test_eml_encoded_subject_is_decoded`).* |
+| F24 | **Haute** | `document_loader.py:337-342` | Fichiers texte : `chardet` classe en ISO-8859-1 (confiance 0,73) un fichier UTF-8 court qui contient peu de caractères accentués, et « à » devient « Ã  » dans l'index. Vérifié avec la version installée (`Bonjour à tous, voici une note.`). Gravité relevée : pour un corpus majoritairement français, la corruption des accents dégrade directement la recherche. *Repéré au lot 1, non corrigé ; corrigé au lot 11 (`xfail` : `test_loader.py::test_txt_short_utf8_is_not_misdetected_as_latin1`).* |
 
 ### 3.3 Performance
 
@@ -305,7 +305,7 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 | 8 | `lot-8` | Re-ranking désactivé par défaut, timeout réel (S1, S3, P1) | 7, 7b | 1 session |
 | 9 | `lot-9` | F1, **F7**, S2, S4, S5, P2 | 4b, 5 | 1–2 sessions |
 | 10 | `lot-10` | SEC3, SEC5, SEC7, SEC9, S7, F11, F20 | 4 | 1 session |
-| 11 | `lot-11` | F15, F16 (tableaux DOCX), F17, F18 ; OCR des PDF scannés documenté comme option | 9 | 1 session |
+| 11 | `lot-11` | F15, F16 (tableaux DOCX), F17, F18, **F23, F24** ; OCR des PDF scannés documenté comme option | 9 | 1 session |
 | 12 | `lot-12` | Documentation, progression réelle, Alpine, CSS Tailwind (optionnel) | — | variable |
 
 ### Lot 1 — Filet de sécurité : tests de caractérisation *(aucun changement de code applicatif)* ✅ Fait
@@ -316,7 +316,7 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 - **Contrat API ↔ moteur** : quelques tests de bout en bout sur un vrai `RAGEngine` avec les faux modèles.
 - *Fini quand* : tous les tests passent sur `v1-legacy`, sans réseau, en moins de 30 s.
 
-**Résultat (lot 1).** `.venv/bin/python -m pytest -q` : 139 tests passent et 9 `xfail(strict=True)` échouent comme prévu, en environ 3 s. La suite passe aussi sur le tag `v1-legacy` (`app/` est inchangé). Une garde dans `conftest.py` refuse toute connexion sortante. `requirements-dev.txt` contient `pytest==9.1.1` seul (version vérifiée sur PyPI).
+**Résultat (lot 1).** `.venv/bin/python -m pytest -q` : 139 tests passent et 11 `xfail(strict=True)` échouent comme prévu, en environ 3 s. La suite passe aussi sur le tag `v1-legacy` (`app/` est inchangé). Une garde dans `conftest.py` refuse toute connexion sortante. `requirements-dev.txt` contient `pytest==9.1.1` seul (version vérifiée sur PyPI).
 
 Chaque `xfail` devient un test normal dans le lot indiqué, qui retire alors le marqueur (`xfail_strict` fait échouer la suite sinon) :
 
@@ -329,6 +329,8 @@ Chaque `xfail` devient un test normal dans le lot indiqué, qui retire alors le 
 | `test_engine_query.py::test_each_extract_is_prefixed_with_its_source` | F3 | — | 7 |
 | `test_engine_query.py::test_selected_source_is_found_wherever_it_ranks` | F5 | — | 7 |
 | `test_loader.py::test_source_is_the_relative_path` | F7 | D5 | 9 |
+| `test_loader.py::test_eml_encoded_subject_is_decoded` | F23 | — | 11 |
+| `test_loader.py::test_txt_short_utf8_is_not_misdetected_as_latin1` | F24 | — | 11 |
 | `test_engine_index.py::test_selective_indexing_adds_to_the_existing_index` | F1 | D1 | 9 |
 
 Les tests de caractérisation qui figent un comportement corrigé plus tard portent la mention du constat et du lot dans leur docstring (F6, F7, F8, F13, F14, F15, F16, F17, F18, F19). Les lots concernés les mettent à jour explicitement.
@@ -397,6 +399,7 @@ Les tests de caractérisation qui figent un comportement corrigé plus tard port
 
 ### Lot 11 — Ingestion
 - E-mails HTML et charsets inconnus (F15), tableaux DOCX (F16), dates normalisées et classification (F17), journalisation et factorisation de `load_all`/`load_specific` (F18).
+- **F23** *(repéré au lot 1)* : décoder l'en-tête `Subject` encodé (RFC 2047). **F24** *(repéré au lot 1, gravité Haute)* : détection d'encodage des fichiers texte (essayer UTF-8 strict avant `chardet`). Les deux `xfail` du lot 1 passent alors au vert.
 - OCR de repli pour les PDF scannés : **décrit comme option, non implémenté** (D9).
 
 ### Lot 12 — Finitions *(optionnel)*

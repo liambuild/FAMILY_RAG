@@ -282,29 +282,29 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 > - le prérequis bloquant du lot 5 est redéfini.
 
 **Règles communes (D10).**
-- Chaque lot a sa branche `lot/<n>-<sujet>`, créée depuis `modernisation` **après la fusion du lot précédent**, et sa PR vers `modernisation`.
+- Chaque lot a sa branche `lot-<n>`, créée depuis `modernisation` **après la fusion du lot précédent**, et sa PR vers `modernisation`.
 - Les tests sont verts à la fin de chaque lot et le corpus de test est réindexé librement.
 - Sans CI, chaque PR cite la commande de test et son résultat ; les lots 6, 7 et 8 citent aussi le résultat de `eval/run_eval.py`.
 - Les tests de caractérisation du lot 1 qui figent un comportement corrigé plus tard sont mis à jour dans le lot qui le corrige, explicitement.
 
 | Lot | Branche | Objet | Prérequis | Effort |
 |---|---|---|---|---|
-| 1 | `lot/01-tests-caracterisation` | Tests qui protègent le comportement actuel | — | 1 session |
-| 1b | `lot/01b-mesure-qualite` | Corpus de test, 15 questions, script de mesure, référence `v1-legacy` | 1 | 1 session |
-| 2 | `lot/02-hygiene` | Dépendances mortes, configuration, entrypoint, **plus de suppression automatique d'index** | 1 | 1–2 h |
-| 2b | `lot/02b-reseau-local` | Réseau local par défaut, override Linux (SEC13, SEC4) | 2 | 1–2 h |
-| 3 | `lot/03-deps-securite` | pypdf, Pillow, jinja2, python-docx, psutil | 2 | 1 h |
-| 4 | `lot/04-fastapi-pydantic` | fastapi, starlette, uvicorn, pydantic, image `python:3.11.17-slim-trixie` | 3 | 1–2 h |
-| 4b | `lot/04b-compatibilite-index` | `index_meta.json`, détection d'incompatibilité, README « Mettre à jour depuis v1-legacy » | 4 | 1 session |
-| 5 | `lot/05-langchain-1x` | Migration LangChain 1.x | **⛔ 4b fusionné** | 1 session |
-| 6 | `lot/06-splitter` | F2, F12, F13, F14 | 5 | 1 session |
-| 7 | `lot/07-recherche-generation` | F3, F4 (`NUM_CTX`), F5, F6 | 6 | 1 session |
-| 7b | `lot/07b-reglages-persistants` | `settings.json`, l'interface l'emporte sur `.env` | 4b | 1 session |
-| 8 | `lot/08-reranking` | Re-ranking désactivé par défaut, timeout réel (S1, S3, P1) | 7, 7b | 1 session |
-| 9 | `lot/09-index-incremental` | F1, **F7**, S2, S4, S5, P2 | 4b, 5 | 1–2 sessions |
-| 10 | `lot/10-durcissement` | SEC3, SEC5, SEC7, SEC9, S7, F11, F20 | 4 | 1 session |
-| 11 | `lot/11-ingestion` | F15, F16 (tableaux DOCX), F17, F18 ; OCR des PDF scannés documenté comme option | 9 | 1 session |
-| 12 | `lot/12-finitions` | Documentation, progression réelle, Alpine, CSS Tailwind (optionnel) | — | variable |
+| 1 | `lot-1` | Tests qui protègent le comportement actuel | — | 1 session |
+| 1b | `lot-1b` | Corpus de test, 15 questions, script de mesure, référence `v1-legacy` | 1 | 1 session |
+| 2 | `lot-2` | Dépendances mortes, configuration, entrypoint, **plus de suppression automatique d'index** | 1 | 1–2 h |
+| 2b | `lot-2b` | Réseau local par défaut, override Linux (SEC13, SEC4) | 2 | 1–2 h |
+| 3 | `lot-3` | pypdf, Pillow, jinja2, python-docx, psutil | 2 | 1 h |
+| 4 | `lot-4` | fastapi, starlette, uvicorn, pydantic, image `python:3.11.17-slim-trixie` | 3 | 1–2 h |
+| 4b | `lot-4b` | `index_meta.json`, détection d'incompatibilité, README « Mettre à jour depuis v1-legacy » | 4 | 1 session |
+| 5 | `lot-5` | Migration LangChain 1.x | **⛔ 4b fusionné** | 1 session |
+| 6 | `lot-6` | F2, F12, F13, F14 | 5 | 1 session |
+| 7 | `lot-7` | F3, F4 (`NUM_CTX`), F5, F6 | 6 | 1 session |
+| 7b | `lot-7b` | `settings.json`, l'interface l'emporte sur `.env` | 4b | 1 session |
+| 8 | `lot-8` | Re-ranking désactivé par défaut, timeout réel (S1, S3, P1) | 7, 7b | 1 session |
+| 9 | `lot-9` | F1, **F7**, S2, S4, S5, P2 | 4b, 5 | 1–2 sessions |
+| 10 | `lot-10` | SEC3, SEC5, SEC7, SEC9, S7, F11, F20 | 4 | 1 session |
+| 11 | `lot-11` | F15, F16 (tableaux DOCX), F17, F18 ; OCR des PDF scannés documenté comme option | 9 | 1 session |
+| 12 | `lot-12` | Documentation, progression réelle, Alpine, CSS Tailwind (optionnel) | — | variable |
 
 ### Lot 1 — Filet de sécurité : tests de caractérisation *(aucun changement de code applicatif)*
 - Ajouter `requirements-dev.txt` (pytest épinglé) et `pytest.ini`. Rendre déterministes les tests `/health` et `/api/ollama/*` en mockant httpx.

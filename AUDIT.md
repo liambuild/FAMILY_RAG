@@ -165,7 +165,7 @@ Vérification du 15/10/2026. « Transitif » = version effectivement résolue pa
 | F12 | Moyenne | `structure_aware_splitter.py:127-130`, `:147-150`, `:143` | Métadonnée `section` erronée : un chunk sauvegardé reçoit le titre de la section **suivante**, et le dernier chunk n'en reçoit aucun. |
 | F13 | Basse | `structure_aware_splitter.py:72,76` | `^\d+\.\s+[A-Z]` combiné à `IGNORECASE` reconnaît toute ligne « 1. texte » comme un titre : la plupart des listes numérotées partent dans le chemin « sections ». Un titre suivi d'un autre titre est perdu (`:119-120`). |
 | F14 | Basse | `structure_aware_splitter.py:125,177,244` | `chunk_size` (configurable) est ignoré dans les chemins structurés, qui utilisent `max_chunk_size` codé en dur à 1 500 (`rag_engine.py:160,169`). |
-| F15 | Basse | `document_loader.py:372-381` | E-mails HTML seuls : corps vide. Charset inconnu : `LookupError`, et tout le fichier est rejeté. |
+| F15 | Basse | `document_loader.py:372-381` | E-mails HTML seuls : corps vide *(précisé au lot 1 : seulement pour un e-mail multipart sans partie `text/plain` ; un e-mail non multipart en `text/html` est lu brut, balises comprises)*. Charset inconnu : `LookupError`, et tout le fichier est rejeté. |
 | F16 | Basse | `document_loader.py:347` ; `:327-335` | DOCX : les tableaux sont ignorés. PDF scannés : aucun texte (pas d'OCR de repli, alors que `poppler-utils` est installé). |
 | F17 | Basse | `document_loader.py:93-96`, `:137` | Dates extraites du contenu non normalisées (formats mélangés). Classification par sous-chaînes naïve (`ml` trouve « html », `four` trouve « fournisseur »). |
 | F18 | Basse | `document_loader.py:186` | `load_all` ignore les fichiers en erreur sans rien journaliser, contrairement à `load_specific`. |
@@ -173,6 +173,8 @@ Vérification du 15/10/2026. « Transitif » = version effectivement résolue pa
 | F20 | Basse | `main.py:126-133` | Une exception d'indexation renvoie HTTP **200** avec `success:false`, contre 400 pour l'autre chemin d'erreur. Les tests figent ce comportement (`test_api.py:224-232`). |
 | F21 | Basse | `index.html:1191-1215` | Barre de progression simulée (aléatoire). « Suspendre » coupe la requête côté navigateur mais l'indexation continue sur le serveur. |
 | F22 | Info | `main.py:50` ; `index.html` | `QueryRequest.image_data` n'est jamais utilisé. Les « conversations » n'envoient pas l'historique : chaque question est traitée isolément. |
+| F23 | Basse | `document_loader.py:358-359` | E-mails : l'en-tête `Subject` encodé (RFC 2047, par exemple `=?utf-8?q?D=C3=AEner?=`) est recopié tel quel dans « Sujet: » : `msg['subject']` n'est pas décodé. *Repéré au lot 1, non corrigé.* |
+| F24 | Moyenne | `document_loader.py:337-342` | Fichiers texte : `chardet` classe en ISO-8859-1 (confiance 0,73) un fichier UTF-8 court qui contient peu de caractères accentués, et « à » devient « Ã  » dans l'index. Vérifié avec la version installée (`Bonjour à tous, voici une note.`). *Repéré au lot 1, non corrigé.* |
 
 ### 3.3 Performance
 
@@ -289,7 +291,7 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 
 | Lot | Branche | Objet | Prérequis | Effort |
 |---|---|---|---|---|
-| 1 | `lot-1` | Tests qui protègent le comportement actuel | — | 1 session |
+| 1 ✅ | `lot-1` | Tests qui protègent le comportement actuel | — | 1 session |
 | 1b | `lot-1b` | Corpus de test, 15 questions, script de mesure, référence `v1-legacy` | 1 | 1 session |
 | 2 | `lot-2` | Dépendances mortes, configuration, entrypoint, **plus de suppression automatique d'index** | 1 | 1–2 h |
 | 2b | `lot-2b` | Réseau local par défaut, override Linux (SEC13, SEC4) | 2 | 1–2 h |
@@ -306,13 +308,30 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 | 11 | `lot-11` | F15, F16 (tableaux DOCX), F17, F18 ; OCR des PDF scannés documenté comme option | 9 | 1 session |
 | 12 | `lot-12` | Documentation, progression réelle, Alpine, CSS Tailwind (optionnel) | — | variable |
 
-### Lot 1 — Filet de sécurité : tests de caractérisation *(aucun changement de code applicatif)*
+### Lot 1 — Filet de sécurité : tests de caractérisation *(aucun changement de code applicatif)* ✅ Fait
 - Ajouter `requirements-dev.txt` (pytest épinglé) et `pytest.ini`. Rendre déterministes les tests `/health` et `/api/ollama/*` en mockant httpx.
 - **Splitter** : tests « golden » sur des textes types, qui figent la sortie actuelle. Les bugs connus (F2, F12) sont décrits par des tests `xfail(strict=True)` exprimant le comportement attendu.
 - **Loader** : un fichier minimal par format, généré dans `tmp_path`, plus les métadonnées.
 - **Moteur** sans Ollama (`DeterministicFakeEmbedding` et un faux chat model de `langchain_core`) : aller-retour sauvegarde/chargement, `query` (filtre, re-ranking, retours anticipés), forme du contexte, `update_embedding_model`, F1 (caractérisation plus `xfail` du comportement voulu, D1), S6 (suppression actuelle de l'index illisible).
 - **Contrat API ↔ moteur** : quelques tests de bout en bout sur un vrai `RAGEngine` avec les faux modèles.
 - *Fini quand* : tous les tests passent sur `v1-legacy`, sans réseau, en moins de 30 s.
+
+**Résultat (lot 1).** `.venv/bin/python -m pytest -q` : 139 tests passent et 9 `xfail(strict=True)` échouent comme prévu, en environ 3 s. La suite passe aussi sur le tag `v1-legacy` (`app/` est inchangé). Une garde dans `conftest.py` refuse toute connexion sortante. `requirements-dev.txt` contient `pytest==9.1.1` seul (version vérifiée sur PyPI).
+
+Chaque `xfail` devient un test normal dans le lot indiqué, qui retire alors le marqueur (`xfail_strict` fait échouer la suite sinon) :
+
+| Test `xfail` | Constat | Décision | Lot |
+|---|---|---|---|
+| `test_splitter.py::test_table_chunk_appears_once`, `::test_list_block_appears_once` | F2 | — | 6 |
+| `test_splitter.py::test_section_metadata_is_the_chunk_own_title` | F12 | — | 6 |
+| `test_engine_index.py::test_unreadable_index_is_left_in_place` | S6 | D2, D12 | 2 |
+| `test_engine_index.py::test_new_model_keeps_the_existing_index_on_disk` | F8 | D2 | 4b |
+| `test_engine_query.py::test_each_extract_is_prefixed_with_its_source` | F3 | — | 7 |
+| `test_engine_query.py::test_selected_source_is_found_wherever_it_ranks` | F5 | — | 7 |
+| `test_loader.py::test_source_is_the_relative_path` | F7 | D5 | 9 |
+| `test_engine_index.py::test_selective_indexing_adds_to_the_existing_index` | F1 | D1 | 9 |
+
+Les tests de caractérisation qui figent un comportement corrigé plus tard portent la mention du constat et du lot dans leur docstring (F6, F7, F8, F13, F14, F15, F16, F17, F18, F19). Les lots concernés les mettent à jour explicitement.
 
 ### Lot 1b — Mesure de qualité reproductible *(nouveau, D4)*
 - `eval/corpus/` : documents fictifs versionnés (PDF texte, DOCX avec tableau, `.eml`, image pour l'OCR, Markdown avec listes et tableau, deux `facture.pdf` homonymes dans deux sous-dossiers).
@@ -342,7 +361,7 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 ### Lot 4b — Compatibilité d'index *(nouveau, D2)*
 - `index_meta.json` écrit à chaque sauvegarde : version du format, modèle et dimension d'embedding, versions de `langchain-core` et `faiss-cpu`, date.
 - Si le fichier est absent ou différent : l'index n'est ni chargé ni supprimé, l'état « index incompatible » est exposé par l'API et affiché dans l'interface, et les requêtes renvoient un message demandant de réindexer.
-- `update_embedding_model` ne supprime plus l'index : il le rend incompatible jusqu'à la réindexation.
+- `update_embedding_model` ne supprime plus l'index (F8) : il le rend incompatible jusqu'à la réindexation.
 - README : section « Mettre à jour depuis v1-legacy » (sauvegarde conseillée du volume `family-rag-index`, réindexation).
 
 ### Lot 5 — Migration LangChain 1.x

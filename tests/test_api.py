@@ -5,17 +5,18 @@ les tests ne nécessitent ni Ollama ni FAISS sur la machine de CI.
 
 Routes couvertes :
   GET  /                     → HTML 200
-  GET  /health               → JSON structuré (Ollama peut être absent)
+  GET  /health               → JSON structuré (Ollama simulé, joignable ou non)
   GET  /api/files            → liste des fichiers
   POST /api/query            → réponse RAG correctement formée
   POST /api/index            → succès et erreur
   GET  /api/index/details    → détails FAISS
   GET  /api/stats            → statistiques index + settings
   PUT  /api/settings         → mise à jour temperature / top_k / llm_model
-  GET  /api/ollama/models    → 503 gracieux si Ollama absent
+  GET  /api/ollama/*         → modèles filtrés, 503 gracieux si Ollama absent
   GET  /api/system/metrics   → métriques CPU / RAM / disque
 """
 
+import httpx
 import pytest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
@@ -89,6 +90,29 @@ def client():
             yield test_client, mock_rag
 
 
+class _FakeAsyncClient:
+    """Remplace httpx.AsyncClient : renvoie une réponse fixe ou lève une erreur, sans réseau."""
+
+    def __init__(self, payload=None, status=200, error=None):
+        self._payload, self._status, self._error = payload, status, error
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def get(self, url, **kwargs):
+        if self._error:
+            raise self._error
+        return httpx.Response(self._status, json=self._payload or {}, request=httpx.Request("GET", url))
+
+
+def ollama_tags(payload=None, status=200, error=None):
+    """Simule la réponse de GET /api/tags d'Ollama pour la durée d'un `with`."""
+    return patch("httpx.AsyncClient", lambda *a, **k: _FakeAsyncClient(payload, status, error))
+
+
 # ---------------------------------------------------------------------------
 # Page d'accueil
 # ---------------------------------------------------------------------------
@@ -107,19 +131,28 @@ class TestHomePage:
 # ---------------------------------------------------------------------------
 
 class TestHealth:
-    def test_returns_200_with_expected_keys(self, client):
+    def test_healthy_when_ollama_answers(self, client):
         c, _ = client
-        r = c.get("/health")
-        assert r.status_code == 200
-        data = r.json()
-        assert "status" in data
-        assert "ollama_connected" in data
+        with ollama_tags({"models": []}):
+            data = c.get("/health").json()
+        assert data["status"] == "healthy"
+        assert data["ollama_connected"] is True
         assert "ollama_host" in data
 
-    def test_status_is_string(self, client):
+    def test_degraded_when_ollama_is_unreachable(self, client):
         c, _ = client
-        data = c.get("/health").json()
-        assert data["status"] in ("healthy", "degraded")
+        with ollama_tags(error=httpx.ConnectError("refusé")):
+            r = c.get("/health")
+        assert r.status_code == 200
+        assert r.json()["status"] == "degraded"
+        assert r.json()["ollama_connected"] is False
+
+    def test_degraded_when_ollama_answers_with_an_error(self, client):
+        c, _ = client
+        with ollama_tags(status=500):
+            data = c.get("/health").json()
+        assert data["status"] == "degraded"
+        assert data["ollama_connected"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -302,27 +335,40 @@ class TestSettings:
 
 
 # ---------------------------------------------------------------------------
-# Modèles Ollama (erreur gracieuse si Ollama absent)
+# Modèles Ollama (httpx simulé, erreur gracieuse si Ollama absent)
 # ---------------------------------------------------------------------------
 
+TAGS = {
+    "models": [
+        {"name": "llama3:latest", "size": 10, "modified_at": "2026-01-01"},
+        {"name": "nomic-embed-text:latest", "size": 20, "modified_at": "2026-01-02"},
+        {"name": "mxbai-embed-large:latest", "size": 30, "modified_at": "2026-01-03"},
+    ]
+}
+
+
 class TestOllamaModels:
-    def test_llm_models_returns_503_or_200(self, client):
-        """Sans Ollama, l'endpoint retourne 503 — pas de crash non géré."""
+    def test_llm_models_exclude_embedding_models(self, client):
         c, _ = client
-        r = c.get("/api/ollama/models")
-        assert r.status_code in (200, 503)
+        with ollama_tags(TAGS):
+            r = c.get("/api/ollama/models")
+        assert r.status_code == 200
+        assert r.json() == {"models": [{"name": "llama3:latest", "size": 10, "modified": "2026-01-01"}]}
 
-    def test_embedding_models_returns_503_or_200(self, client):
+    def test_embedding_models_keep_only_embedding_models(self, client):
         c, _ = client
-        r = c.get("/api/ollama/embedding-models")
-        assert r.status_code in (200, 503)
+        with ollama_tags(TAGS):
+            r = c.get("/api/ollama/embedding-models")
+        assert r.status_code == 200
+        assert [m["name"] for m in r.json()["models"]] == ["nomic-embed-text:latest", "mxbai-embed-large:latest"]
 
-    def test_503_has_detail_field(self, client):
-        """Le 503 doit contenir un message d'erreur exploitable."""
+    @pytest.mark.parametrize("route", ["/api/ollama/models", "/api/ollama/embedding-models"])
+    def test_503_with_a_detail_when_ollama_is_unreachable(self, client, route):
         c, _ = client
-        r = c.get("/api/ollama/models")
-        if r.status_code == 503:
-            assert "detail" in r.json()
+        with ollama_tags(error=httpx.ConnectError("refusé")):
+            r = c.get(route)
+        assert r.status_code == 503
+        assert r.json()["detail"].startswith("Impossible de contacter Ollama")
 
 
 # ---------------------------------------------------------------------------

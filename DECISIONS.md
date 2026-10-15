@@ -143,7 +143,7 @@ Le regroupement des réindexations n'a plus d'objet : chaque lot réindexe libre
 **Décision.** Chaque lot a sa branche, créée depuis `modernisation` à jour, et sa PR vers `modernisation`. Pas de CI pour l'instant.
 
 **Impact sur le plan.**
-- Nommage proposé : `lot/01-tests-caracterisation`, `lot/01b-mesure-qualite`, `lot/02-hygiene`, `lot/02b-reseau-local`, et ainsi de suite (voir AUDIT.md §6).
+- Nommage (aligné sur CLAUDE.md) : `lot-1`, `lot-1b`, `lot-2`, `lot-2b`, et ainsi de suite (voir AUDIT.md §6).
 - Les lots s'enchaînent : chaque branche part de `modernisation` **après** la fusion de la précédente.
 - Sans CI, chaque PR cite la commande de test lancée et son résultat. Les lots 6, 7 et 8 citent aussi le résultat de `eval/run_eval.py`.
 

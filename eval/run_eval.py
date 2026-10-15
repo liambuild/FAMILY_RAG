@@ -19,6 +19,7 @@ import statistics
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unicodedata
 from datetime import datetime
@@ -86,6 +87,13 @@ def grade(question: dict, answer: str, sources: list[str]) -> dict:
     return result
 
 
+def throughput(rows: list[dict], count: str, duration: str) -> float | None:
+    """Tokens par seconde sur l'ensemble des appels (durées Ollama en nanosecondes)."""
+    tokens = sum(r.get(count) or 0 for r in rows)
+    nanoseconds = sum(r.get(duration) or 0 for r in rows)
+    return round(tokens / (nanoseconds / 1e9), 1) if nanoseconds else None
+
+
 def summarize(rows: list[dict]) -> dict:
     """Agrégats d'un mode : tout, puis hors écarts connus (`known_gap`)."""
     def block(subset: list[dict]) -> dict:
@@ -104,6 +112,10 @@ def summarize(rows: list[dict]) -> dict:
             "latency_p50_s": percentile(latencies, 0.5),
             "latency_p95_s": percentile(latencies, 0.95),
             "latency_mean_s": round(statistics.mean(latencies), 2) if latencies else None,
+            "prompt_tokens_p50": percentile([r["prompt_eval_count"] for r in measured if r.get("prompt_eval_count")], 0.5),
+            "prompt_tokens_max": max((r["prompt_eval_count"] for r in measured if r.get("prompt_eval_count")), default=None),
+            "prompt_tokens_per_s": throughput(measured, "prompt_eval_count", "prompt_eval_duration"),
+            "generated_tokens_per_s": throughput(measured, "eval_count", "eval_duration"),
             "source_found": rate(with_sources, lambda r: r["source_hit"]),
             "key_elements_complete": rate(with_elements, lambda r: r["key_elements_found"] == r["key_elements_total"]),
             "answers_with_citation": rate(measured, lambda r: r["cited_files"]),
@@ -112,6 +124,45 @@ def summarize(rows: list[dict]) -> dict:
         }
 
     return {"all": block(rows), "without_known_gaps": block([r for r in rows if not r.get("known_gap")])}
+
+
+USAGE_FIELDS = ("prompt_eval_count", "prompt_eval_duration", "eval_count", "eval_duration")
+
+
+class UsageCollector:
+    """Cumule les compteurs renvoyés par Ollama (durées en nanosecondes) pour chaque appel au LLM.
+
+    Branché sur `engine.llm.callbacks` : le code de app/ n'est pas modifié, ce qui permet de
+    mesurer aussi bien lot-1b que v1-legacy. Avec le re-ranking, une question fait plusieurs appels ;
+    `answer_call` est le dernier, c'est-à-dire la génération de la réponse.
+    """
+
+    def __init__(self) -> None:
+        from langchain_core.callbacks import BaseCallbackHandler
+
+        collector = self
+
+        class Handler(BaseCallbackHandler):
+            def on_llm_end(self, response, **kwargs) -> None:
+                for generations in response.generations:
+                    for generation in generations:
+                        metadata = getattr(getattr(generation, "message", None), "response_metadata", None) or {}
+                        collector.add({f: metadata.get(f) for f in USAGE_FIELDS})
+
+        self.handler = Handler()
+        self._lock = threading.Lock()
+        self.reset()
+
+    def reset(self) -> None:
+        self.calls: list[dict] = []
+
+    def add(self, call: dict) -> None:
+        with self._lock:
+            self.calls.append(call)
+
+    def snapshot(self) -> dict:
+        totals = {f: sum(c[f] or 0 for c in self.calls) for f in USAGE_FIELDS}
+        return {"llm_calls": len(self.calls), **totals, "answer_call": self.calls[-1] if self.calls else None}
 
 
 def command_output(*command: str) -> str | None:
@@ -174,6 +225,8 @@ def run(args: argparse.Namespace) -> dict:
 
         settings = get_settings()
         engine = RAGEngine()
+        usage = UsageCollector()
+        engine.llm.callbacks = [usage.handler]
 
         started = time.perf_counter()
         indexing = engine.index_documents()
@@ -200,15 +253,17 @@ def run(args: argparse.Namespace) -> dict:
                     rows.append(row)
                     print(f"[{name}] Q{question['id']:>2} ignorée ({row['skipped']})", file=sys.stderr)
                     continue
+                usage.reset()
                 started = time.perf_counter()
                 result = engine.query(question["question"], enable_reranking=rerank)
                 latency = round(time.perf_counter() - started, 2)
                 sources = [s["source"] for s in result.sources]
-                row.update(latency_s=latency, answer=result.answer, sources=sources,
-                           **grade(question, result.answer, sources))
+                row.update(latency_s=latency, answer=result.answer, sources=sources, **usage.snapshot(),
+                           index_documents=indexing.get("documents"), **grade(question, result.answer, sources))
                 rows.append(row)
                 print(f"[{name}] Q{question['id']:>2} {latency:>6.1f} s  source={row['source_hit']}  "
-                      f"éléments={row['key_elements_found']}/{row['key_elements_total']}", file=sys.stderr)
+                      f"éléments={row['key_elements_found']}/{row['key_elements_total']}  "
+                      f"prompt={row['prompt_eval_count']} tok", file=sys.stderr)
             results[name] = {"questions": rows, "summary": summarize(rows)}
 
         os.chdir(origin)
@@ -221,10 +276,28 @@ def run(args: argparse.Namespace) -> dict:
                            "chunk_size": settings.chunk_size, "chunk_overlap": settings.chunk_overlap},
             "index": {"documents": indexing.get("documents"), "chunks": indexing.get("chunks"), "seconds": index_s},
             "warmup_s": warmup_s,
+            "note": args.note,
             "source_matching": "chemin relatif exact ; nom de base si le moteur ne renvoie que des noms (v1-legacy)",
             "heuristics": "citations = noms de fichiers cités dans la réponse ; abstention = formules d'aveu d'ignorance",
         }
     return {"meta": meta, "results": results}
+
+
+def merge_into(path: Path, report: dict) -> dict:
+    """Remplace dans une mesure existante les seules questions remesurées, puis recalcule les résumés."""
+    previous = json.loads(path.read_text(encoding="utf-8"))
+    for mode, data in report["results"].items():
+        previous["results"].setdefault(mode, {"questions": [], "summary": {}})  # mode mesuré pour la première fois
+        new_ids = {r["id"] for r in data["questions"]}
+        rows = [r for r in previous["results"][mode]["questions"] if r["id"] not in new_ids] + data["questions"]
+        rows.sort(key=lambda r: r["id"])
+        previous["results"][mode] = {"questions": rows, "summary": summarize(rows)}
+    previous["meta"].setdefault("remeasured", []).append({
+        "questions": sorted(new_ids), "date": report["meta"]["date"], "index": report["meta"]["index"],
+        "code": report["meta"]["code"], "tesseract": bool(shutil.which("tesseract")),
+        "modes": list(report["results"]), "note": report["meta"]["note"],
+    })
+    return previous
 
 
 def print_report(report: dict) -> None:
@@ -265,6 +338,9 @@ def main() -> None:
     parser.add_argument("--ollama-host", default=os.environ.get("OLLAMA_HOST", "127.0.0.1:11434"))
     parser.add_argument("--rerank", choices=["off", "on", "both"], default="off")
     parser.add_argument("--only", type=int, nargs="+", help="numéros de questions à poser")
+    parser.add_argument("--merge", action="store_true",
+                        help="avec --only : remplace ces questions dans le fichier de sortie existant au lieu de l'écraser")
+    parser.add_argument("--note", default="", help="remarque libre enregistrée dans meta (contraintes de la machine, etc.)")
     parser.add_argument("--output", help="fichier JSON (défaut : eval/results/<label>.json)")
     parser.add_argument("--compare", nargs=2, metavar=("A.json", "B.json"), help="compare deux mesures et quitte")
     args = parser.parse_args()
@@ -275,6 +351,10 @@ def main() -> None:
     report = run(args)
     output = Path(args.output).resolve() if args.output else EVAL_DIR / "results" / f"{args.label}.json"
     output.parent.mkdir(parents=True, exist_ok=True)
+    if args.merge:
+        if not args.only or not output.exists():
+            sys.exit("--merge exige --only et un fichier de sortie existant (--output ou --label)")
+        report = merge_into(output, report)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print_report(report)
     print(f"\nRésultats : {output}")

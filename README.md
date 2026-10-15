@@ -249,6 +249,18 @@ Les tests ne requièrent **ni Ollama ni FAISS** — le moteur RAG est entièreme
 
 ---
 
+## 📏 Mesurer la qualité des réponses
+
+`eval/` contient un petit corpus fictif, 15 questions de référence et un script de mesure (latence, source retrouvée, éléments clés, citations). Il nécessite Ollama et n'est **pas** lancé par `pytest`. Il travaille sur un index temporaire : votre index et vos documents ne sont jamais touchés.
+
+```bash
+python eval/run_eval.py --label ma-machine --llm <votre-modele-de-chat>
+```
+
+Voir [eval/README.md](eval/README.md). Cet ajout ne change ni le comportement de l'application ni le format de l'index.
+
+---
+
 ## 📖 Documentation
 
 | Guide | Description |

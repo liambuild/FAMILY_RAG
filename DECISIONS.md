@@ -71,7 +71,7 @@ Le regroupement des réindexations n'a plus d'objet : chaque lot réindexe libre
 
 ## D4 — Qualité contre latence : re-ranking désactivé par défaut
 
-**Décision.** Objectif indicatif : une réponse en moins de 15 s. Le re-ranking est **désactivé par défaut** et activable dans les réglages. La mesure de qualité doit être reproductible par quiconque dispose d'Ollama.
+**Décision.** ~~Objectif indicatif : une réponse en moins de 15 s.~~ *(révisé pendant le lot 1b)* L'objectif devient un **budget en tokens de prompt** par question, indépendant de la machine ; le temps de réponse mesuré est **seulement indicatif**. Sur la VM de mesure (3 cœurs, CPU seul, `gemma3:4b`), le traitement du prompt tourne autour de 9 tokens/s et domine la latence (une réponse dure de 10 s à plus de 150 s selon la taille du prompt) : un seuil en secondes n'a donc de sens que pour une machine donnée. Le script de mesure enregistre pour chaque question `prompt_eval_count`, `prompt_eval_duration` et `eval_duration` (renvoyés par Ollama), en plus du temps total. La valeur du budget sera fixée au lot 7, avec `NUM_CTX` (D3), à partir de ces mesures. Le re-ranking est **désactivé par défaut** et activable dans les réglages. La mesure de qualité doit être reproductible par quiconque dispose d'Ollama.
 
 **Impact sur le plan.**
 - **Lot 1b (nouveau, « Mesure de qualité »)**, placé après le lot 1 (correction C4) :
@@ -175,7 +175,7 @@ Le lot 5 ne commence pas tant que **le lot 4b n'est pas fusionné dans `modernis
 | Docker Desktop et Ollama sur `127.0.0.1` | Lot 2b | À vérifier sur Mac **et** Windows (je n'ai que Linux). Si cela échoue, documenter l'alternative pour ces plateformes. |
 | Valeur par défaut de `NUM_CTX` | Lot 7 | 4096 proposé ; à confirmer par une mesure du lot 1b. |
 | 15 questions de référence | Lot 1b | Proposées dans la PR, à valider. |
-| Seuil de 15 s | Lot 8 | Dépend de la machine. La mesure de référence indiquera la machine utilisée. |
+| Budget en tokens de prompt (remplace le seuil de 15 s) | Lots 7 et 8 | Valeur à fixer d'après les champs `prompt_eval_*` du lot 1b ; le temps mesuré reste indicatif. |
 
 ## Évolutions futures (hors plan)
 

@@ -386,7 +386,7 @@ Les tests de caractérisation qui figent un comportement corrigé plus tard port
 ### Lot 8 — Re-ranking maîtrisé
 - `RERANKING_ENABLED=false` par défaut, interrupteur dans les réglages (persisté via 7b).
 - Vrai timeout (côté `ChatOllama`/httpx), plafond de candidats, timeout sur la génération (S1, S3, P1).
-- Mesure via le lot 1b, avec et sans re-ranking, au regard de l'objectif indicatif de 15 s.
+- Mesure via le lot 1b, avec et sans re-ranking, au regard du budget en tokens de prompt (D4, révisé ; le temps mesuré reste indicatif).
 
 ### Lot 9 — Index incrémental et robuste
 - Indexation **incrémentale** : cocher des fichiers les ajoute ou remplace leurs chunks, sans jamais effacer le reste (F1, D1) ; suppression des fichiers disparus.

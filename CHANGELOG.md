@@ -25,6 +25,8 @@ versionnage selon [Semantic Versioning](https://semver.org/lang/fr/).
 - `app/entrypoint.sh`, `Dockerfile` — adresse d'écoute d'uvicorn pilotée par `APP_HOST` (défaut `0.0.0.0` dans le conteneur) au lieu d'être figée dans le `CMD`
 - `README.md`, `MANAGE.md`, `docker-compose.yml`, `.env.example` — retrait du conseil `network_mode: host`, qui exposait l'application au réseau local (SEC13) ; aucune authentification n'existe
 
+- `app/requirements.txt` — correctifs de sécurité (lot 3) : pypdf 5.1.0 → 6.20.1, Pillow 11.1.0 → 12.3.0, jinja2 3.1.5 → 3.1.6, python-docx 1.1.2 → 1.2.0, psutil 6.1.1 → 7.2.2. Aucun avis OSV connu sur ces versions (le 20/10/2026) ; pypdf 5.1.0 et Pillow 11.1.0 en cumulaient respectivement 97 et 34. Format d'index inchangé.
+
 ### Ajouté (lot 2b)
 - `docker-compose.linux.yml` — override Linux : `network_mode: host`, Ollama et application sur `127.0.0.1`
 

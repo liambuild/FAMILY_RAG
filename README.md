@@ -248,6 +248,7 @@ Si vous avez déjà une installation, vérifiez ces points avant de reconstruire
 - L'image n'embarque plus `libmagic1` ni `poppler-utils`, qui n'étaient pas utilisés.
 - **Réseau (lot 2b).** L'ancienne consigne Linux (décommenter `network_mode: host` dans `docker-compose.yml`) rendait l'application et tous vos documents accessibles à tout le réseau local, sans authentification. Elle est retirée. Si vous l'aviez suivie, remettez `docker-compose.yml` dans son état d'origine (`git checkout docker-compose.yml`) et lancez avec `-f docker-compose.yml -f docker-compose.linux.yml`.
 - **`ollama-override.conf` est supprimé** : il faisait écouter Ollama sur `0.0.0.0`, donc sur tout le réseau. Si vous l'aviez installé (`/etc/systemd/system/ollama.service.d/`), supprimez-le puis `sudo systemctl daemon-reload && sudo systemctl restart ollama`. Les modèles et vos index ne sont pas touchés.
+- **Dépendances (lot 3).** pypdf, Pillow, jinja2, python-docx et psutil passent à des versions corrigées (pypdf et Pillow cumulaient des dizaines d'avis de sécurité, dont des dénis de service par PDF ou image piégés). Reconstruisez l'image (`docker compose up -d --build`). Le format de l'index ne change pas : pas de réindexation à faire.
 - L'adresse d'écoute de l'application est la variable `APP_HOST` (défaut `0.0.0.0` dans le conteneur, ce qui est nécessaire en mode bridge ; l'exposition reste limitée par `127.0.0.1:8000:8000`). Docker Desktop : rien à changer.
 
 ---

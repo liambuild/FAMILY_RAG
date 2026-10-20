@@ -514,6 +514,12 @@
                         <p x-show="indexProgress >= 90" class="text-xs text-orange-300 mt-2 opacity-90">💡 L'indexation peut prendre du temps pour les gros fichiers (génération d'embeddings)...</p>
                     </div>
 
+                    <!-- Index incompatible (créé par une autre version ou un autre modèle d'embedding) -->
+                    <div x-show="stats.index.status === 'incompatible'" x-transition class="bg-orange-900/30 border border-orange-500/50 rounded-lg compact-padding mb-4 animate-fadeIn">
+                        <p class="text-xs text-orange-300 font-medium mb-1">⚠️ Index incompatible : ré-indexation requise</p>
+                        <p class="text-xs text-orange-200 opacity-80" x-text="stats.index.message"></p>
+                    </div>
+
                     <!-- Stats -->
                     <div class="grid grid-cols-3 gap-3 mb-4">
                         <div class="bg-elevated rounded-lg compact-padding text-center border border-themed hover-lift">
@@ -838,7 +844,7 @@
                     { id: 'cyber', name: 'Cyber', accent: '#00d4ff', accentDark: '#0e7490' },
                     { id: 'tactical', name: 'Tactical', accent: '#ff3333', accentDark: '#b91c1c' }
                 ],
-                stats: { index: { exists: false, total_documents: 0, total_chunks: 0 }, settings: { llm_model: '', embedding_model: '', chunk_size: 0, chunk_overlap: 0, temperature: 0.7, top_k: 8 } },
+                stats: { index: { exists: false, total_documents: 0, total_chunks: 0, status: 'absent', message: null }, settings: { llm_model: '', embedding_model: '', chunk_size: 0, chunk_overlap: 0, temperature: 0.7, top_k: 8 } },
                 settings: { temperature: 0.7, top_k: 8 },
 
                 // Conversation management

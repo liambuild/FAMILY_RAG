@@ -297,7 +297,7 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 | 2b ✅ | `lot-2b` | Réseau local par défaut, override Linux (SEC13, SEC4) | 2 | 1–2 h |
 | 3 ✅ | `lot-3` | pypdf, Pillow, jinja2, python-docx, psutil | 2 | 1 h |
 | 4 ✅ | `lot-4` | fastapi, starlette, uvicorn, pydantic, image `python:3.11.17-slim-trixie` | 3 | 1–2 h |
-| 4b | `lot-4b` | `index_meta.json`, détection d'incompatibilité, README « Mettre à jour depuis v1-legacy » | 4 | 1 session |
+| 4b ✅ | `lot-4b` | `index_meta.json`, détection d'incompatibilité, README « Mettre à jour depuis v1-legacy » | 4 | 1 session |
 | 5 | `lot-5` | Migration LangChain 1.x | **⛔ 4b fusionné** | 1 session |
 | 6 | `lot-6` | F2, F12, F13, F14 | 5 | 1 session |
 | 7 | `lot-7` | F3, F4 (`NUM_CTX`), F5, F6 | 6 | 1 session |
@@ -325,7 +325,7 @@ Chaque `xfail` devient un test normal dans le lot indiqué, qui retire alors le 
 | `test_splitter.py::test_table_chunk_appears_once`, `::test_list_block_appears_once` | F2 | — | 6 |
 | `test_splitter.py::test_section_metadata_is_the_chunk_own_title` | F12 | — | 6 |
 | `test_engine_index.py::test_unreadable_index_is_left_in_place` | S6 | D2, D12 | 2 |
-| `test_engine_index.py::test_new_model_keeps_the_existing_index_on_disk` | F8 | D2 | 4b |
+| `test_engine_index.py::test_new_model_asks_for_reindexing_but_keeps_the_index` (ex-xfail) | F8 | D2 | 4b ✅ |
 | `test_engine_query.py::test_each_extract_is_prefixed_with_its_source` | F3 | — | 7 |
 | `test_engine_query.py::test_selected_source_is_found_wherever_it_ranks` | F5 | — | 7 |
 | `test_loader.py::test_source_is_the_relative_path` | F7 | D5 | 9 |
@@ -367,11 +367,12 @@ Les tests de caractérisation qui figent un comportement corrigé plus tard port
 - *Note de fin de lot (versions revérifiées le 20/10/2026 sur PyPI, OSV et Docker Hub).* 0 avis OSV sur chaque version. `starlette==1.8.0` est épinglé dans `requirements.txt` : fastapi n'exige que `starlette>=0.46`, sans cet épinglage le correctif de SEC8 ne serait pas garanti et le build ne serait pas reproductible. Plus récents que le plan : fastapi 0.151.0 (20/10) et starlette 1.9.0 (18/10), non retenus (publiés depuis quelques jours). Vérifié : tests, `pip check`, build de l'image, et dans le conteneur démarrage, `/`, `/health`, `/static/…`, `/api/files`, OCR Tesseract.
 - **Hors lot, à proposer.** `starlette.testclient` signale que l'usage de `httpx` est déprécié au profit de `httpx2` : un avertissement dans les tests seulement. Le changer ajouterait une dépendance de test : à décider, non fait.
 
-### Lot 4b — Compatibilité d'index *(nouveau, D2)*
+### Lot 4b — Compatibilité d'index *(nouveau, D2)* ✅ Fait
 - `index_meta.json` écrit à chaque sauvegarde : version du format, modèle et dimension d'embedding, versions de `langchain-core` et `faiss-cpu`, date.
 - Si le fichier est absent ou différent : l'index n'est ni chargé ni supprimé, l'état « index incompatible » est exposé par l'API et affiché dans l'interface, et les requêtes renvoient un message demandant de réindexer.
 - `update_embedding_model` ne supprime plus l'index (F8) : il le rend incompatible jusqu'à la réindexation.
 - README : section « Mettre à jour depuis v1-legacy » (sauvegarde conseillée du volume `family-rag-index`, réindexation).
+- *Note de fin de lot.* Choix : l'égalité des versions de `langchain-core` et de `faiss-cpu` est **exacte** (D2 : « différent de ce qu'attend le code ») ; tout changement de ces paquets, y compris un patch, rend les index existants incompatibles. Le lot 5 les change donc : les index créés au lot 4b devront être reconstruits une fois de plus. Les noms de modèles sont comparés sans le tag implicite `:latest`. F8 reste ouvert pour sa seconde moitié (modèle choisi non persisté après redémarrage, lot 7b). Tests : `tests/test_index_compat.py`. Non vérifié dans un navigateur : le bandeau de l'interface (HTML Alpine) n'est couvert que par les tests de l'API qui l'alimente.
 
 ### Lot 5 — Migration LangChain 1.x
 - **⛔ Prérequis bloquant : lot 4b fusionné dans `modernisation`** (DECISIONS.md, D12).

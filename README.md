@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/LangChain-0.3-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white" alt="LangChain"/>
+  <img src="https://img.shields.io/badge/LangChain-1.x-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white" alt="LangChain"/>
   <img src="https://img.shields.io/badge/FAISS-Vector_DB-0467DF?style=for-the-badge&logo=meta&logoColor=white" alt="FAISS"/>
   <img src="https://img.shields.io/badge/Ministral_3-Vision-FF6B6B?style=for-the-badge&logo=mistral&logoColor=white" alt="Ministral 3"/>
   <img src="https://img.shields.io/badge/Tesseract-OCR-5A5A5A?style=for-the-badge&logo=google&logoColor=white" alt="Tesseract"/>
@@ -266,6 +266,8 @@ Si vous avez déjà une installation, vérifiez ces points avant de reconstruire
 3. Ouvrez l'interface : un bandeau orange « Index incompatible : ré-indexation requise » s'affiche dans l'onglet Documents, et `/api/stats` renvoie `"status": "incompatible"` avec une explication. Une question posée à ce stade reçoit le même message au lieu d'une erreur.
 4. Cliquez sur **Indexer**. Quand l'indexation réussit, l'index est reconstruit et le bandeau disparaît. Si elle échoue (Ollama arrêté, par exemple), l'ancien index n'est pas touché.
 5. En cas de problème, restaurez la sauvegarde (voir MANAGE.md) et revenez à la version précédente.
+
+**LangChain 1.x (lot 5).** Cette version migre LangChain de 0.3 vers 1.x (`langchain-core` 1.6, `langchain-community` 0.4, `langchain-ollama` 1.1, `faiss-cpu` 1.15). Le format interne de l'index n'est pas garanti d'une version à l'autre : un index créé avec LangChain 0.3 est donc déclaré incompatible et doit être reconstruit, comme décrit ci-dessus. Si vous passez directement de v1-legacy à cette version, **une seule réindexation** suffit. Reconstruisez l'image (`docker compose up -d --build`).
 
 **Changer de modèle d'embedding** (réglages) ne supprime plus l'index non plus : il est déclaré incompatible jusqu'à la réindexation, et redevient utilisable si vous revenez au modèle d'origine. Le modèle choisi dans l'interface n'est toujours pas mémorisé après un redémarrage (il revient à la valeur de `.env`).
 

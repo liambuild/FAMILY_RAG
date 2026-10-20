@@ -15,11 +15,11 @@ from typing import Optional, List
 from dataclasses import dataclass
 
 from fastapi import HTTPException
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings, ChatOllama
-from langchain.schema import Document
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.documents import Document
+from langchain_core.prompts import ChatPromptTemplate
 
 from config import get_settings
 from document_loader import DocumentLoader

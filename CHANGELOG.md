@@ -32,6 +32,8 @@ versionnage selon [Semantic Versioning](https://semver.org/lang/fr/).
 - `app/rag_engine.py` — lot 4b (D2) : `index_meta.json` écrit à chaque sauvegarde (version du format, modèle et dimension d'embedding, versions de `langchain-core` et `faiss-cpu`, date). Un index absent de ce fichier, ou différent de ce qu'attend le code, n'est ni chargé ni supprimé : l'état « incompatible » est exposé par `/api/stats` (`index.status`, `index.message`) et `/api/index/details`, affiché dans l'interface, et les requêtes renvoient un message demandant de réindexer. **Les index créés par `v1-legacy` sont donc incompatibles : réindexation à faire** (voir README).
 - `update_embedding_model` ne supprime plus l'index (F8) : il le déclare incompatible jusqu'à la réindexation, et le recharge si l'on revient au modèle d'origine.
 
+- `app/requirements.txt`, `app/*.py` — lot 5 : migration LangChain 0.3 → 1.x. Retrait du paquet `langchain` ; imports vers `langchain_core.documents`, `langchain_core.prompts` et `langchain_text_splitters`. langchain-core 1.6.10 et langchain-text-splitters 1.1.3 (jusqu'ici transitifs) sont épinglés ; langchain-community 0.3.14 → 0.4.2, langchain-ollama 0.2.2 → 1.1.0, faiss-cpu 1.9.0.post1 → 1.15.1 ; numpy (transitif) épinglé à 2.4.6 (au lieu de 1.26.4). Aucun avis OSV sur ces versions (20/10/2026) ; langchain 0.3.14 et langchain-core 0.3.63 en cumulaient 4 et 12. **Les index existants (LangChain 0.3) sont déclarés incompatibles : réindexation nécessaire** (une seule si l'on vient de v1-legacy).
+
 ### Ajouté (lot 2b)
 - `docker-compose.linux.yml` — override Linux : `network_mode: host`, Ollama et application sur `127.0.0.1`
 

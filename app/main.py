@@ -73,7 +73,7 @@ class VisionBase64Request(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Page d'accueil avec l'interface web."""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 @app.get("/health")

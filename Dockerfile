@@ -5,8 +5,6 @@ WORKDIR /app
 # Dépendances système pour les parsers de documents + OCR
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    libmagic1 \
-    poppler-utils \
     tesseract-ocr \
     tesseract-ocr-fra \
     tesseract-ocr-eng \

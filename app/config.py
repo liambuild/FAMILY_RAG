@@ -1,6 +1,6 @@
 """Configuration centralisée de l'application."""
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
 
@@ -27,9 +27,8 @@ class Settings(BaseSettings):
     @property
     def ollama_base_url(self) -> str:
         return f"http://{self.ollama_host}"
-    
-    class Config:
-        env_file = ".env"
+
+    model_config = SettingsConfigDict(env_file=".env")
 
 
 @lru_cache

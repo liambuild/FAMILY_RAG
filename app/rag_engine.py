@@ -112,13 +112,12 @@ class RAGEngine:
                 logger.info("Index chargé avec succès")
                 return True
             except Exception as e:
-                logger.error("Erreur chargement index: %s", e)
-                logger.warning("Suppression de l'index corrompu...")
-                try:
-                    shutil.rmtree(str(self.index_path))
-                    logger.info("Index corrompu supprimé. Veuillez ré-indexer vos documents.")
-                except Exception as cleanup_error:
-                    logger.error("Impossible de supprimer l'index corrompu: %s", cleanup_error)
+                # L'index est laissé en place (S6) : jamais de suppression automatique
+                logger.error(
+                    "Index illisible dans %s (%s). Il n'est pas supprimé : sauvegardez-le "
+                    "(volume family-rag-index) puis réindexez vos documents.",
+                    self.index_path, e
+                )
         return False
 
     def _save_index(self):

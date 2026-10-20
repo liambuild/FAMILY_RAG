@@ -295,7 +295,7 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 | 1b ✅ | `lot-1b` | Corpus de test, 15 questions, script de mesure (la référence `v1-legacy` reste à produire, voir point ouvert) | 1 | 1 session |
 | 2 ✅ | `lot-2` | Dépendances mortes, configuration, entrypoint, **plus de suppression automatique d'index** | 1 | 1–2 h |
 | 2b ✅ | `lot-2b` | Réseau local par défaut, override Linux (SEC13, SEC4) | 2 | 1–2 h |
-| 3 | `lot-3` | pypdf, Pillow, jinja2, python-docx, psutil | 2 | 1 h |
+| 3 ✅ | `lot-3` | pypdf, Pillow, jinja2, python-docx, psutil | 2 | 1 h |
 | 4 | `lot-4` | fastapi, starlette, uvicorn, pydantic, image `python:3.11.17-slim-trixie` | 3 | 1–2 h |
 | 4b | `lot-4b` | `index_meta.json`, détection d'incompatibilité, README « Mettre à jour depuis v1-legacy » | 4 | 1 session |
 | 5 | `lot-5` | Migration LangChain 1.x | **⛔ 4b fusionné** | 1 session |
@@ -357,8 +357,9 @@ Les tests de caractérisation qui figent un comportement corrigé plus tard port
 - Retirer le conseil `network_mode: host` du compose principal ; réécrire `README.md:221,229` et `MANAGE.md:341` ; retirer `ollama-override.conf` (SEC4).
 - *Note de fin de lot.* Non vérifié : l'override Linux n'a pas été lancé de bout en bout (seul `docker compose config` a validé la fusion) ; Docker Desktop (Mac et Windows) avec un Ollama limité à `127.0.0.1` reste à tester par quelqu'un qui dispose de ces plateformes. L'override exige Docker Compose ≥ 2.24.4 (`!reset`).
 
-### Lot 3 — Correctifs de sécurité des dépendances
+### Lot 3 — Correctifs de sécurité des dépendances ✅ Fait
 - pypdf 6.20.1, Pillow 12.3.0, jinja2 3.1.6, python-docx 1.2.0, psutil 7.2.2.
+- *Note de fin de lot (versions revérifiées le 20/10/2026 sur PyPI et OSV).* Zéro avis OSV sur chacune de ces versions. Deux versions plus récentes existent depuis l'audit : pypdf 6.21.1 (17/10) et **Pillow 13.0.0** (16/10, majeure). Elles n'ont pas été retenues : correctifs de sécurité seulement dans ce lot, et une majeure vieille de quatre jours n'a pas sa place dans une montée « sans risque ». À reconsidérer plus tard. Vérifié : suite de tests, `pip check`, build de l'image, et dans l'image l'OCR (Pillow 12.3.0 + Tesseract) sur `eval/corpus/recette_scan.png`, la lecture d'un PDF et d'un DOCX.
 
 ### Lot 4 — FastAPI / Starlette / Uvicorn / Pydantic
 - fastapi 0.143.1 (starlette 1.x), uvicorn 0.54.0, pydantic 2.14.1, pydantic-settings 2.16.0.

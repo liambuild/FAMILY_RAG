@@ -17,3 +17,10 @@ versionnage selon [Semantic Versioning](https://semver.org/lang/fr/).
 
 ### Modifié
 - `docker-compose.yml` — binding du port 8000 restreint à `127.0.0.1` (accès local uniquement)
+- `docker-compose.yml` — transmet `LLM_MODEL`, `TOP_K` et `TEMPERATURE` au conteneur ; ils étaient jusqu'ici ignorés (F9)
+- `app/entrypoint.sh` — `OLLAMA_HOST` est testé en premier, sans doublon (F10)
+- `app/rag_engine.py` — un index illisible n'est plus supprimé au chargement : l'erreur est journalisée (S6)
+- `app/config.py`, `app/main.py` — `model_config` et `TemplateResponse(request, ...)` (plus d'avertissements de dépréciation)
+
+### Supprimé
+- Dépendances inutilisées `python-multipart`, `python-magic`, `aiofiles` et paquets système `libmagic1`, `poppler-utils`

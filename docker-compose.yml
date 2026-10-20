@@ -15,6 +15,9 @@ services:
       # Linux avec network_mode=host: localhost:11434
       - OLLAMA_HOST=${OLLAMA_HOST:-host.docker.internal:11434}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-nomic-embed-text}
+      - LLM_MODEL=${LLM_MODEL:-}
+      - TOP_K=${TOP_K:-12}
+      - TEMPERATURE=${TEMPERATURE:-0.7}
       - CHUNK_SIZE=${CHUNK_SIZE:-1200}
       - CHUNK_OVERLAP=${CHUNK_OVERLAP:-300}
     extra_hosts:

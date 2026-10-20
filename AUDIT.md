@@ -293,7 +293,7 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 |---|---|---|---|---|
 | 1 ✅ | `lot-1` | Tests qui protègent le comportement actuel | — | 1 session |
 | 1b ✅ | `lot-1b` | Corpus de test, 15 questions, script de mesure (la référence `v1-legacy` reste à produire, voir point ouvert) | 1 | 1 session |
-| 2 | `lot-2` | Dépendances mortes, configuration, entrypoint, **plus de suppression automatique d'index** | 1 | 1–2 h |
+| 2 ✅ | `lot-2` | Dépendances mortes, configuration, entrypoint, **plus de suppression automatique d'index** | 1 | 1–2 h |
 | 2b | `lot-2b` | Réseau local par défaut, override Linux (SEC13, SEC4) | 2 | 1–2 h |
 | 3 | `lot-3` | pypdf, Pillow, jinja2, python-docx, psutil | 2 | 1 h |
 | 4 | `lot-4` | fastapi, starlette, uvicorn, pydantic, image `python:3.11.17-slim-trixie` | 3 | 1–2 h |
@@ -343,11 +343,12 @@ Les tests de caractérisation qui figent un comportement corrigé plus tard port
 - Le re-ranking activé n'est pas mesurable tant que S1 n'est pas corrigé (lot 8) ; le script le signale.
 - **Point ouvert — mesure de référence non produite.** Aucune mesure n'a été exécutée pendant ce lot. Elle reste à produire sur une machine disposant d'Ollama (`v1-legacy` puis branche courante, procédure dans `eval/README.md`) et à ranger dans `eval/results/v1-legacy*.json`. En attendant, les lots 6 à 9 se valident par leurs tests et leurs `xfail` (DECISIONS.md, D4).
 
-### Lot 2 — Hygiène sans risque
+### Lot 2 — Hygiène sans risque ✅ Fait
 - Retirer `python-multipart`, `aiofiles`, `python-magic`, `libmagic1` et `poppler-utils` (D9).
 - Nettoyer `.gitignore:1` ; migrer `class Config` → `model_config` ; passer `TemplateResponse(request, "index.html")`.
 - Transmettre `LLM_MODEL`, `TOP_K` et `TEMPERATURE` dans `docker-compose.yml` (F9) ; tester `OLLAMA_HOST` en premier dans `entrypoint.sh` (F10).
 - **S6** *(déplacé depuis le lot 9)* : un index illisible est laissé en place, l'erreur est journalisée, plus aucun `rmtree` au chargement.
+- *Note de fin de lot.* Un index illisible laissé en place est remplacé par `save_local` à la prochaine indexation demandée par l'utilisateur (jamais automatiquement) ; l'état « index incompatible » arrive au lot 4b. `update_embedding_model` supprime encore l'index (F8, lot 4b) : non touché ici.
 
 ### Lot 2b — Réseau local par défaut *(nouveau, D7)*
 - Variable `APP_HOST` pour l'adresse d'écoute d'uvicorn. Par défaut `0.0.0.0` dans le conteneur, ce qu'exige le mode bridge, l'exposition restant limitée par le mappage `127.0.0.1:8000:8000`.

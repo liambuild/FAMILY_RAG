@@ -228,6 +228,15 @@ Toutes les variables sont déclarées dans `.env` (copié depuis `.env.example`)
 
 > **Note Linux** : remplacez `OLLAMA_HOST=host.docker.internal:11434` par `OLLAMA_HOST=localhost:11434` et décommentez `network_mode: host` dans `docker-compose.yml`.
 
+### Mise à jour depuis une version précédente (lot 2)
+
+Si vous avez déjà une installation, vérifiez ces points avant de reconstruire l'image (`docker compose up --build`) :
+
+- **`LLM_MODEL`, `TOP_K` et `TEMPERATURE` sont désormais pris en compte.** Jusqu'ici, `docker-compose.yml` ne les transmettait pas au conteneur : leurs valeurs dans `.env` étaient ignorées. Relisez-les : si elles diffèrent des défauts (modèle auto-détecté, `12`, `0.7`), le comportement de l'application changera.
+- **`OLLAMA_HOST` est testé en premier** au démarrage. Avant, `host.docker.internal` l'emportait s'il répondait, même si vous aviez choisi une autre adresse.
+- **Un index illisible n'est plus supprimé au démarrage.** Il reste sur le volume `family-rag-index` et l'erreur est écrite dans les journaux. Sauvegardez le volume avant de réindexer ; la prochaine indexation que vous demandez remplace son contenu.
+- L'image n'embarque plus `libmagic1` ni `poppler-utils`, qui n'étaient pas utilisés.
+
 ---
 
 ## 🧪 Tests

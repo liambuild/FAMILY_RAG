@@ -3,12 +3,12 @@ set -e
 
 echo "[Entrypoint] Détection automatique d'Ollama..."
 
-# Liste des adresses possibles pour Ollama
+# Adresses possibles pour Ollama : OLLAMA_HOST (configuration explicite) est testé en premier
 OLLAMA_CANDIDATES=(
+    "${OLLAMA_HOST}"              # Variable d'environnement personnalisée
     "host.docker.internal:11434"  # Mac/Windows avec Docker Desktop
     "localhost:11434"              # Mode host sur Linux
     "172.17.0.1:11434"            # Bridge gateway (si Ollama écoute sur 0.0.0.0)
-    "${OLLAMA_HOST}"              # Variable d'environnement personnalisée
 )
 
 # Fonction pour tester la connexion à Ollama
@@ -28,7 +28,10 @@ test_ollama() {
 
 # Tester chaque candidat
 OLLAMA_DETECTED=""
+TESTED=" "
 for candidate in "${OLLAMA_CANDIDATES[@]}"; do
+    case "$TESTED" in *" $candidate "*) continue ;; esac  # déjà testé (doublon)
+    TESTED="$TESTED$candidate "
     if test_ollama "$candidate"; then
         OLLAMA_DETECTED="$candidate"
         break

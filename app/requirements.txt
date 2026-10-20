@@ -1,6 +1,7 @@
 # API
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
+fastapi==0.143.1
+starlette==1.8.0  # transitif de fastapi, épinglé pour les correctifs de sécurité (SEC8)
+uvicorn[standard]==0.54.0
 
 # RAG
 langchain==0.3.14
@@ -18,8 +19,8 @@ pytesseract==0.3.13
 Pillow==12.3.0
 
 # Utils
-pydantic==2.10.4
-pydantic-settings==2.7.1
+pydantic==2.14.1
+pydantic-settings==2.16.0
 jinja2==3.1.6
 httpx==0.28.1
 psutil==7.2.2

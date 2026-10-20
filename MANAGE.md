@@ -327,15 +327,8 @@ ollama pull mistral:latest
 
 ---
 
-## 🌐 Accès réseau local
+## 🌐 Accès réseau
 
-Pour accéder à Family RAG depuis d'autres appareils du réseau :
+Family RAG est **local par défaut** : le port 8000 n'est lié qu'à `127.0.0.1` (mode bridge, mappage `127.0.0.1:8000:8000`) et, avec `docker-compose.linux.yml`, l'application n'écoute que sur `127.0.0.1`.
 
-```bash
-# Trouver votre IP locale
-ipconfig getifaddr en0
-
-# Accès : http://VOTRE_IP:8000
-```
-
-> ⚠️ Par défaut, seul localhost est exposé. Pour exposer sur le réseau, le port est déjà configuré sur `0.0.0.0` dans le container.
+> ⚠️ L'application n'a **pas d'authentification** et donne accès à tous vos documents indexés. Ne l'exposez pas au réseau local : changer le mappage de port ou l'adresse d'écoute n'est pas pris en charge. Un `docker run -p 8000:8000` hors compose l'exposerait sur toutes les interfaces (utilisez `-p 127.0.0.1:8000:8000`). Ollama doit lui aussi rester sur `127.0.0.1`, son réglage par défaut.

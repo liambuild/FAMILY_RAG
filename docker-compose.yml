@@ -2,17 +2,14 @@ services:
   family-rag:
     build: .
     container_name: family-rag
-    # Mode bridge par défaut (Mac/Windows)
-    # Sur Linux uniquement: décommentez la ligne suivante et mettez OLLAMA_HOST=localhost:11434 dans .env
-    # network_mode: host
+    # Mode bridge par défaut. Sous Linux, ajoutez docker-compose.linux.yml (voir README).
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
       - ${HOST_DATA_PATH:?Définir HOST_DATA_PATH dans .env}:/data
       - family-rag-index:/app/index
     environment:
-      # Mac/Windows: host.docker.internal:11434 (défaut)
-      # Linux avec network_mode=host: localhost:11434
+      # Docker Desktop (Mac/Windows): host.docker.internal:11434 (défaut)
       - OLLAMA_HOST=${OLLAMA_HOST:-host.docker.internal:11434}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-nomic-embed-text}
       - LLM_MODEL=${LLM_MODEL:-}

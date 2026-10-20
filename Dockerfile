@@ -29,4 +29,6 @@ EXPOSE 8000
 
 # Utiliser l'entrypoint pour la détection automatique d'Ollama
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# L'adresse d'écoute vient de APP_HOST (entrypoint.sh) : 0.0.0.0 dans le conteneur par défaut,
+# l'exposition réelle étant limitée par le mappage 127.0.0.1:8000:8000 du compose.
+CMD ["uvicorn", "main:app", "--port", "8000"]

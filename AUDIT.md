@@ -294,7 +294,7 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 | 1 ✅ | `lot-1` | Tests qui protègent le comportement actuel | — | 1 session |
 | 1b ✅ | `lot-1b` | Corpus de test, 15 questions, script de mesure (la référence `v1-legacy` reste à produire, voir point ouvert) | 1 | 1 session |
 | 2 ✅ | `lot-2` | Dépendances mortes, configuration, entrypoint, **plus de suppression automatique d'index** | 1 | 1–2 h |
-| 2b | `lot-2b` | Réseau local par défaut, override Linux (SEC13, SEC4) | 2 | 1–2 h |
+| 2b ✅ | `lot-2b` | Réseau local par défaut, override Linux (SEC13, SEC4) | 2 | 1–2 h |
 | 3 | `lot-3` | pypdf, Pillow, jinja2, python-docx, psutil | 2 | 1 h |
 | 4 | `lot-4` | fastapi, starlette, uvicorn, pydantic, image `python:3.11.17-slim-trixie` | 3 | 1–2 h |
 | 4b | `lot-4b` | `index_meta.json`, détection d'incompatibilité, README « Mettre à jour depuis v1-legacy » | 4 | 1 session |
@@ -350,11 +350,12 @@ Les tests de caractérisation qui figent un comportement corrigé plus tard port
 - **S6** *(déplacé depuis le lot 9)* : un index illisible est laissé en place, l'erreur est journalisée, plus aucun `rmtree` au chargement.
 - *Note de fin de lot.* Un index illisible laissé en place est remplacé par `save_local` à la prochaine indexation demandée par l'utilisateur (jamais automatiquement) ; l'état « index incompatible » arrive au lot 4b. `update_embedding_model` supprime encore l'index (F8, lot 4b) : non touché ici.
 
-### Lot 2b — Réseau local par défaut *(nouveau, D7)*
+### Lot 2b — Réseau local par défaut *(nouveau, D7)* ✅ Fait
 - Variable `APP_HOST` pour l'adresse d'écoute d'uvicorn. Par défaut `0.0.0.0` dans le conteneur, ce qu'exige le mode bridge, l'exposition restant limitée par le mappage `127.0.0.1:8000:8000`.
 - `docker-compose.linux.yml` : `network_mode: host`, `OLLAMA_HOST=127.0.0.1:11434`, `APP_HOST=127.0.0.1`.
 - Docker Desktop : comportement inchangé (bridge + `host.docker.internal`). Accès à un Ollama limité à `127.0.0.1` à vérifier sur Mac et Windows.
 - Retirer le conseil `network_mode: host` du compose principal ; réécrire `README.md:221,229` et `MANAGE.md:341` ; retirer `ollama-override.conf` (SEC4).
+- *Note de fin de lot.* Non vérifié : l'override Linux n'a pas été lancé de bout en bout (seul `docker compose config` a validé la fusion) ; Docker Desktop (Mac et Windows) avec un Ollama limité à `127.0.0.1` reste à tester par quelqu'un qui dispose de ces plateformes. L'override exige Docker Compose ≥ 2.24.4 (`!reset`).
 
 ### Lot 3 — Correctifs de sécurité des dépendances
 - pypdf 6.20.1, Pillow 12.3.0, jinja2 3.1.6, python-docx 1.2.0, psutil 7.2.2.

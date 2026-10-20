@@ -201,9 +201,19 @@ ollama pull nomic-embed-text
 
 ### 3. Lancer
 
+**Mac / Windows (Docker Desktop)** :
+
 ```bash
 docker compose up -d --build
 ```
+
+**Linux** : ajoutez le fichier `docker-compose.linux.yml`. L'application partage alors le réseau de l'hôte, joint Ollama sur `127.0.0.1:11434` et n'écoute elle-même que sur `127.0.0.1` (Docker Compose 2.24.4 ou plus récent requis).
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.linux.yml up -d --build
+```
+
+Ollama n'a besoin d'aucun réglage réseau : il écoute sur `127.0.0.1` par défaut.
 
 ### 4. C'est prêt !
 
@@ -218,7 +228,7 @@ Toutes les variables sont déclarées dans `.env` (copié depuis `.env.example`)
 | Variable | Défaut | Obligatoire | Description |
 |----------|--------|:-----------:|-------------|
 | `HOST_DATA_PATH` | — | ✅ | Chemin absolu vers le dossier de documents sur l'hôte |
-| `OLLAMA_HOST` | `host.docker.internal:11434` | | Adresse du serveur Ollama (`host:port`) — `localhost:11434` sur Linux avec `network_mode: host` |
+| `OLLAMA_HOST` | `host.docker.internal:11434` | | Adresse du serveur Ollama (`host:port`) ; sous Linux, `docker-compose.linux.yml` la fixe à `127.0.0.1:11434` |
 | `EMBEDDING_MODEL` | `nomic-embed-text` | | Modèle Ollama utilisé pour la vectorisation des documents |
 | `LLM_MODEL` | _(auto-détecté)_ | | Modèle de génération Ollama ; si vide, le premier modèle disponible est sélectionné automatiquement |
 | `CHUNK_SIZE` | `1200` | | Taille maximale d'un chunk en caractères |
@@ -226,9 +236,9 @@ Toutes les variables sont déclarées dans `.env` (copié depuis `.env.example`)
 | `TOP_K` | `12` | | Nombre de chunks récupérés par requête RAG avant re-ranking |
 | `TEMPERATURE` | `0.7` | | Créativité du LLM (`0` = précis et factuel, `1` = créatif) |
 
-> **Note Linux** : remplacez `OLLAMA_HOST=host.docker.internal:11434` par `OLLAMA_HOST=localhost:11434` et décommentez `network_mode: host` dans `docker-compose.yml`.
+> **Accès réseau** : l'application n'a pas d'authentification. Le port est lié à `127.0.0.1` : seule la machine qui l'héberge y accède. Ne le publiez pas sur le réseau local. Un `docker run -p 8000:8000` lancé hors compose l'exposerait sur toutes les interfaces ; utilisez `-p 127.0.0.1:8000:8000`.
 
-### Mise à jour depuis une version précédente (lot 2)
+### Mise à jour depuis une version précédente (lots 2 et 2b)
 
 Si vous avez déjà une installation, vérifiez ces points avant de reconstruire l'image (`docker compose up --build`) :
 
@@ -236,6 +246,9 @@ Si vous avez déjà une installation, vérifiez ces points avant de reconstruire
 - **`OLLAMA_HOST` est testé en premier** au démarrage. Avant, `host.docker.internal` l'emportait s'il répondait, même si vous aviez choisi une autre adresse.
 - **Un index illisible n'est plus supprimé au démarrage.** Il reste sur le volume `family-rag-index` et l'erreur est écrite dans les journaux. Sauvegardez le volume avant de réindexer ; la prochaine indexation que vous demandez remplace son contenu.
 - L'image n'embarque plus `libmagic1` ni `poppler-utils`, qui n'étaient pas utilisés.
+- **Réseau (lot 2b).** L'ancienne consigne Linux (décommenter `network_mode: host` dans `docker-compose.yml`) rendait l'application et tous vos documents accessibles à tout le réseau local, sans authentification. Elle est retirée. Si vous l'aviez suivie, remettez `docker-compose.yml` dans son état d'origine (`git checkout docker-compose.yml`) et lancez avec `-f docker-compose.yml -f docker-compose.linux.yml`.
+- **`ollama-override.conf` est supprimé** : il faisait écouter Ollama sur `0.0.0.0`, donc sur tout le réseau. Si vous l'aviez installé (`/etc/systemd/system/ollama.service.d/`), supprimez-le puis `sudo systemctl daemon-reload && sudo systemctl restart ollama`. Les modèles et vos index ne sont pas touchés.
+- L'adresse d'écoute de l'application est la variable `APP_HOST` (défaut `0.0.0.0` dans le conteneur, ce qui est nécessaire en mode bridge ; l'exposition reste limitée par `127.0.0.1:8000:8000`). Docker Desktop : rien à changer.
 
 ---
 

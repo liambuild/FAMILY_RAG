@@ -47,6 +47,12 @@ else
     export OLLAMA_HOST="${OLLAMA_HOST:-host.docker.internal:11434}"
 fi
 
+# Adresse d'écoute d'uvicorn (lue par uvicorn via UVICORN_HOST).
+# 0.0.0.0 par défaut : nécessaire dans le conteneur en mode bridge, où l'exposition est limitée
+# par le mappage de port du compose. L'override Linux (network_mode: host) la fixe à 127.0.0.1.
+export UVICORN_HOST="${APP_HOST:-0.0.0.0}"
+echo "[Entrypoint] Adresse d'écoute: $UVICORN_HOST"
+
 # Lancer l'application
 echo "[Entrypoint] Démarrage de l'application..."
 exec "$@"

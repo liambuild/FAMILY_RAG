@@ -1,0 +1,117 @@
+# 15 questions de référence sur eval/corpus/ (documents fictifs, voir eval/build_corpus.py).
+#
+# key_elements : chaque entrée doit apparaître dans la réponse (sans tenir compte de la casse ni des accents) ;
+#                une sous-liste donne des variantes équivalentes (une seule suffit).
+# expected_sources : chemins relatifs à eval/corpus/ (sous v1-legacy, seul le nom de base est comparé).
+# known_gap : écart connu de l'audit ; l'échec n'est pas compté comme une régression.
+# requires : prérequis système ; la question est ignorée (et signalée) s'il manque.
+# abstain : la réponse attendue est un aveu d'ignorance ; aucune source n'est attendue.
+
+- id: 1
+  category: pdf
+  question: Quelle est la franchise du contrat d'assurance habitation ?
+  expected_answer: 250 euros par sinistre
+  key_elements: ["250"]
+  expected_sources: [assurance/contrat_habitation.pdf]
+
+- id: 2
+  category: pdf
+  question: À quelle date le contrat d'assurance habitation arrive-t-il à échéance ?
+  expected_answer: 31 décembre 2025
+  key_elements: [["31 decembre 2025", "31/12/2025"]]
+  expected_sources: [assurance/contrat_habitation.pdf]
+
+- id: 3
+  category: reformulation
+  question: Combien la famille paie-t-elle chaque année pour son assurance de la maison ?
+  expected_answer: 412 euros
+  key_elements: ["412"]
+  expected_sources: [assurance/contrat_habitation.pdf]
+
+- id: 4
+  category: docx-table
+  question: Quel budget est prévu pour les vacances en 2024 ?
+  expected_answer: 1800 euros (cellule d'un tableau)
+  key_elements: [["1800", "1 800"]]
+  expected_sources: [budget_2024.docx]
+  known_gap: "F16 : les tableaux DOCX sont ignorés (lot 11)"
+
+- id: 5
+  category: eml
+  question: À quelle heure commence l'anniversaire de Léa ?
+  expected_answer: 15 h 30
+  key_elements: [["15 h 30", "15h30", "15:30"]]
+  expected_sources: [invitation_anniversaire.eml]
+
+- id: 6
+  category: eml
+  question: Qui apporte le gâteau à l'anniversaire de Léa ?
+  expected_answer: Tante Claire
+  key_elements: ["claire"]
+  expected_sources: [invitation_anniversaire.eml]
+
+- id: 7
+  category: ocr
+  question: À quelle température faut-il cuire la tarte aux pommes de mamie ?
+  expected_answer: 180 degrés pendant 35 minutes (texte d'une image)
+  key_elements: ["180"]
+  expected_sources: [recette_scan.png]
+  requires: tesseract
+
+- id: 8
+  category: markdown-list
+  question: Quels sont les ingrédients de la tarte aux pommes ?
+  expected_answer: pommes, farine, beurre, sucre
+  key_elements: ["pommes", "farine", "beurre", "sucre"]
+  expected_sources: [recettes.md]
+
+- id: 9
+  category: markdown-table
+  question: Qui doit sortir les poubelles le mardi ?
+  expected_answer: Hugo
+  key_elements: ["hugo"]
+  expected_sources: [menage.md]
+
+- id: 10
+  category: homonymes
+  question: Quel est le montant de la facture d'électricité EDF ?
+  expected_answer: 87,40 euros
+  key_elements: [["87,40", "87.40"]]
+  expected_sources: [edf/facture.pdf]
+
+- id: 11
+  category: homonymes
+  question: Quel est le montant de la facture du garage ?
+  expected_answer: 342,00 euros
+  key_elements: [["342,00", "342.00", "342"]]
+  expected_sources: [garage/facture.pdf]
+
+- id: 12
+  category: txt-accents
+  question: Où est rangée la clef du chalet ?
+  expected_answer: dans le tiroir du couloir
+  key_elements: ["tiroir du couloir"]
+  expected_sources: [note_courte.txt]
+  known_gap: "F24 : ce court fichier UTF-8 est lu en ISO-8859-1 (lot 11)"
+
+- id: 13
+  category: eml-subject
+  question: Quel est le sujet du mail de Marie à propos de dimanche ?
+  expected_answer: Dîner dimanche
+  key_elements: ["dîner dimanche"]
+  expected_sources: [sujet_encode.eml]
+  known_gap: "F23 : l'en-tête Subject encodé n'est pas décodé (lot 11)"
+
+- id: 14
+  category: multi-sources
+  question: Quelle facture est la plus élevée, celle d'EDF ou celle du garage ?
+  expected_answer: celle du garage (342,00 contre 87,40 euros)
+  key_elements: ["garage", "342"]
+  expected_sources: [edf/facture.pdf, garage/facture.pdf]
+
+- id: 15
+  category: hors-corpus
+  question: Quel est le code wifi des voisins ?
+  expected_answer: aveu d'ignorance, sans rien inventer
+  abstain: true
+  expected_sources: []

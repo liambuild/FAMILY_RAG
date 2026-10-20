@@ -1,28 +1,28 @@
 # API
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-python-multipart==0.0.20
+fastapi==0.143.1
+starlette==1.8.0  # transitif de fastapi, épinglé pour les correctifs de sécurité (SEC8)
+uvicorn[standard]==0.54.0
 
 # RAG
-langchain==0.3.14
-langchain-community==0.3.14
-langchain-ollama==0.2.2
-faiss-cpu==1.9.0.post1
+langchain-core==1.6.10
+langchain-text-splitters==1.1.3
+langchain-community==0.4.2
+langchain-ollama==1.1.0
+faiss-cpu==1.15.1
+numpy==2.4.6  # transitif (faiss-cpu, langchain-community), épinglé pour un build reproductible
 
 # Document loaders
-pypdf==5.1.0
-python-docx==1.1.2
-python-magic==0.4.27
+pypdf==6.20.1
+python-docx==1.2.0
 chardet==5.2.0
 
 # OCR
 pytesseract==0.3.13
-Pillow==11.1.0
+Pillow==12.3.0
 
 # Utils
-pydantic==2.10.4
-pydantic-settings==2.7.1
-jinja2==3.1.5
-aiofiles==24.1.0
+pydantic==2.14.1
+pydantic-settings==2.16.0
+jinja2==3.1.6
 httpx==0.28.1
-psutil==6.1.1
+psutil==7.2.2

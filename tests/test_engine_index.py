@@ -107,19 +107,15 @@ class TestSaveLoad:
         assert engine.vectorstore is None
         assert not engine.index_path.exists()
 
-    def test_unreadable_index_is_deleted(self, indexed, make_engine):
-        """Caractérisation de S6 : un index illisible est supprimé au chargement (lot 2)."""
+    def test_unreadable_index_is_left_in_place(self, indexed, make_engine, caplog):
+        """S6/D2/D12 : un index illisible n'est jamais supprimé automatiquement, l'erreur est journalisée."""
         (indexed.index_path / "index.pkl").write_bytes(b"corrompu")
-        restarted = make_engine()
-        assert restarted.vectorstore is None
-        assert not restarted.index_path.exists()
-
-    @pytest.mark.xfail(reason="S6/D2/D12 : un index illisible ne doit jamais être supprimé (lot 2)")
-    def test_unreadable_index_is_left_in_place(self, indexed, make_engine):
-        (indexed.index_path / "index.pkl").write_bytes(b"corrompu")
-        restarted = make_engine()
+        with caplog.at_level("ERROR"):
+            restarted = make_engine()
         assert restarted.vectorstore is None
         assert (restarted.index_path / "index.faiss").is_file()
+        assert (restarted.index_path / "index.pkl").read_bytes() == b"corrompu"
+        assert "Index illisible" in caplog.text
 
 
 # --- Changement de modèle d'embedding ----------------------------------------
@@ -130,18 +126,13 @@ class TestEmbeddingModelChange:
         assert indexed.vectorstore is not None
         assert indexed.index_path.exists()
 
-    def test_new_model_asks_for_reindexing_and_drops_the_index(self, indexed):
-        """Caractérisation de F8 : l'index est supprimé avant toute réindexation (lot 4b)."""
+    def test_new_model_asks_for_reindexing_but_keeps_the_index(self, indexed):
+        """F8/D2 : l'index reste sur le disque, il est seulement déclaré incompatible."""
         assert indexed.update_embedding_model("autre-modele") is True
         assert indexed.settings.embedding_model == "autre-modele"
         assert indexed.vectorstore is None
-        assert not indexed.index_path.exists()
-
-    @pytest.mark.xfail(reason="F8/D2 : l'index existant doit rester en place tant que la réindexation "
-                              "n'a pas réussi ; il est seulement déclaré incompatible (lot 4b)")
-    def test_new_model_keeps_the_existing_index_on_disk(self, indexed):
-        indexed.update_embedding_model("autre-modele")
-        assert indexed.index_path.exists()
+        assert indexed.index_status == "incompatible"
+        assert (indexed.index_path / "index.faiss").is_file()
 
     def test_new_model_is_not_persisted(self, indexed, make_engine, monkeypatch):
         """Caractérisation de F8 : après redémarrage, le modèle de la configuration revient."""

@@ -1,0 +1,40 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 404 >>
+stream
+BT /F1 12 Tf 72 720 Td 16 TL
+(Contrat d'assurance habitation n° HAB-2023-0417) '
+(Assuré : famille Martin, 12 rue des Lilas, 69003 Lyon) '
+(Assureur : Mutuelle du Rhône) '
+(Prime annuelle : 412 euros, payable en deux fois.) '
+(Franchise : 250 euros par sinistre \(dégât des eaux, vol, incendie\).) '
+(Date d'effet : 1er janvier 2023.) '
+(Échéance du contrat : 31 décembre 2025, reconduction tacite.) '
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000696 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+793
+%%EOF

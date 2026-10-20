@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from fastapi import HTTPException
-from langchain.schema import Document
+from langchain_core.documents import Document
 from pypdf import PdfReader
 from docx import Document as DocxDocument
 import pytesseract

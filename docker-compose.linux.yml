@@ -1,0 +1,14 @@
+# Override pour Linux : l'application partage le réseau de l'hôte et joint Ollama sur 127.0.0.1
+# (Ollama écoute sur 127.0.0.1 par défaut, aucune réexposition nécessaire).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.linux.yml up -d --build
+#
+# En mode host, l'application n'écoute que sur 127.0.0.1 : elle reste inaccessible depuis le réseau local.
+services:
+  family-rag:
+    network_mode: host
+    ports: !reset []
+    extra_hosts: !reset []
+    environment:
+      - OLLAMA_HOST=127.0.0.1:11434
+      - APP_HOST=127.0.0.1

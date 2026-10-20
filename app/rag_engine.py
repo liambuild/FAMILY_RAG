@@ -1,22 +1,25 @@
 """Moteur RAG avec FAISS et LangChain."""
 
+import json
 import logging
+import os
 import re
-import shutil
 import time
 import base64
 import httpx
+from datetime import datetime
+from importlib.metadata import version as package_version
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from typing import Optional, List
 from dataclasses import dataclass
 
 from fastapi import HTTPException
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings, ChatOllama
-from langchain.schema import Document
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.documents import Document
+from langchain_core.prompts import ChatPromptTemplate
 
 from config import get_settings
 from document_loader import DocumentLoader
@@ -42,6 +45,26 @@ class IndexStats:
     total_chunks: int
     index_exists: bool
     last_updated: Optional[str] = None
+    status: str = "ok"  # "absent", "ok" ou "incompatible" (voir RAGEngine.index_status)
+    message: Optional[str] = None  # explication affichable quand l'index est incompatible
+
+
+# Version du format de l'index sur disque. À incrémenter si la structure de faiss_index/ ou de
+# index_meta.json change de façon non rétrocompatible.
+INDEX_FORMAT_VERSION = 1
+INDEX_META_FILE = "index_meta.json"
+
+INCOMPATIBLE_ANSWER = (
+    "L'index de vos documents a été créé par une version différente de FamilyRAG (ou avec un autre "
+    "modèle d'embedding) et ne peut pas être utilisé tel quel : {reason}. "
+    "Il n'a pas été supprimé. Cliquez sur « Indexer » dans l'onglet Documents pour le reconstruire "
+    "(pensez à sauvegarder le volume family-rag-index avant)."
+)
+
+
+def _same_model(a: str, b: str) -> bool:
+    """Compare deux noms de modèles Ollama en ignorant le tag implicite ':latest'."""
+    return a.removesuffix(":latest") == b.removesuffix(":latest")
 
 
 class RAGEngine:
@@ -53,6 +76,9 @@ class RAGEngine:
         self.vectorstore: Optional[FAISS] = None
         self.doc_loader = DocumentLoader()
         self.llm: Optional[ChatOllama] = None
+        # État de l'index sur disque : "absent", "ok" ou "incompatible" (jamais supprimé, voir D2)
+        self.index_status = "absent"
+        self.index_problem: Optional[str] = None
 
         # Auto-détecter le modèle LLM si non spécifié
         if not self.settings.llm_model:
@@ -99,33 +125,108 @@ class RAGEngine:
         logger.warning("Aucun modèle LLM trouvé. Installez un modèle avec 'ollama pull <modele>'")
         return ""
 
+    def _current_meta(self) -> dict:
+        """Ce que l'index écrit aujourd'hui décrirait : voir `_check_meta`."""
+        return {
+            "format_version": INDEX_FORMAT_VERSION,
+            "embedding_model": self.settings.embedding_model,
+            "langchain_core": package_version("langchain-core"),
+            "faiss_cpu": package_version("faiss-cpu"),
+        }
+
+    def _check_meta(self) -> Optional[str]:
+        """Compare index_meta.json à ce qu'attend ce code. Renvoie la raison de l'incompatibilité, ou None.
+
+        Un index sans index_meta.json (créé par v1-legacy) est incompatible. Les versions de
+        langchain-core et de faiss-cpu doivent être identiques : le format pickle de l'index
+        n'est pas garanti d'une version à l'autre.
+        """
+        meta_path = self.index_path / INDEX_META_FILE
+        if not meta_path.is_file():
+            return "il n'a pas de fichier index_meta.json (index créé par une version antérieure)"
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            if not isinstance(meta, dict):
+                raise ValueError("contenu inattendu")
+        except (OSError, ValueError) as e:
+            return f"son fichier index_meta.json est illisible ({e})"
+
+        expected = self._current_meta()
+        if meta.get("format_version") != expected["format_version"]:
+            return (f"format d'index {meta.get('format_version')!r}, "
+                    f"attendu {expected['format_version']}")
+        indexed_model = str(meta.get("embedding_model", ""))
+        if not _same_model(indexed_model, expected["embedding_model"]):
+            return (f"il a été créé avec le modèle d'embedding « {indexed_model} » "
+                    f"et le modèle actuel est « {expected['embedding_model']} »")
+        for key, label in (("langchain_core", "langchain-core"), ("faiss_cpu", "faiss-cpu")):
+            if meta.get(key) != expected[key]:
+                return f"il a été créé avec {label} {meta.get(key)!r}, la version installée est {expected[key]!r}"
+        return None
+
+    def _mark_incompatible(self, reason: str) -> None:
+        """Déclare l'index inutilisable sans y toucher."""
+        self.vectorstore = None
+        self.index_status = "incompatible"
+        self.index_problem = reason
+        logger.warning(
+            "Index incompatible dans %s : %s. Il n'est ni chargé ni supprimé ; "
+            "réindexez vos documents (sauvegardez d'abord le volume family-rag-index).",
+            self.index_path, reason
+        )
+
     def _load_index(self) -> bool:
-        """Charge l'index FAISS depuis le disque."""
-        if self.index_path.exists():
-            try:
-                logger.info("Chargement de l'index depuis %s...", self.index_path)
-                self.vectorstore = FAISS.load_local(
-                    str(self.index_path),
-                    self.embeddings,
-                    allow_dangerous_deserialization=True
-                )
-                logger.info("Index chargé avec succès")
-                return True
-            except Exception as e:
-                logger.error("Erreur chargement index: %s", e)
-                logger.warning("Suppression de l'index corrompu...")
-                try:
-                    shutil.rmtree(str(self.index_path))
-                    logger.info("Index corrompu supprimé. Veuillez ré-indexer vos documents.")
-                except Exception as cleanup_error:
-                    logger.error("Impossible de supprimer l'index corrompu: %s", cleanup_error)
-        return False
+        """Charge l'index FAISS depuis le disque s'il est compatible ; ne supprime jamais rien."""
+        self.vectorstore = None
+        self.index_problem = None
+        if not self.index_path.exists():
+            self.index_status = "absent"
+            return False
+
+        reason = self._check_meta()
+        if reason:
+            self._mark_incompatible(reason)
+            return False
+
+        try:
+            logger.info("Chargement de l'index depuis %s...", self.index_path)
+            store = FAISS.load_local(
+                str(self.index_path),
+                self.embeddings,
+                allow_dangerous_deserialization=True
+            )
+        except Exception as e:
+            # L'index est laissé en place (S6) : jamais de suppression automatique
+            logger.error("Index illisible dans %s : %s", self.index_path, e)
+            self._mark_incompatible(f"il est illisible ({e})")
+            return False
+
+        recorded = json.loads((self.index_path / INDEX_META_FILE).read_text(encoding="utf-8")).get("embedding_dimension")
+        if recorded is not None and recorded != store.index.d:
+            self._mark_incompatible(f"dimension d'embedding incohérente ({recorded} dans index_meta.json, {store.index.d} dans l'index)")
+            return False
+
+        self.vectorstore = store
+        self.index_status = "ok"
+        logger.info("Index chargé avec succès")
+        return True
 
     def _save_index(self):
-        """Sauvegarde l'index FAISS sur le disque."""
+        """Sauvegarde l'index FAISS et son index_meta.json sur le disque."""
         if self.vectorstore:
             self.index_path.parent.mkdir(parents=True, exist_ok=True)
             self.vectorstore.save_local(str(self.index_path))
+            meta = {
+                **self._current_meta(),
+                "embedding_dimension": self.vectorstore.index.d,
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+            }
+            # Écriture atomique : le fichier n'existe jamais à moitié écrit
+            temporary = self.index_path / (INDEX_META_FILE + ".tmp")
+            temporary.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+            os.replace(temporary, self.index_path / INDEX_META_FILE)
+            self.index_status = "ok"
+            self.index_problem = None
 
     def index_documents(self, selected_files: list = None) -> dict:
         """Indexe les documents sélectionnés ou tous les documents.
@@ -224,11 +325,19 @@ class RAGEngine:
             'indexed_files': [doc.metadata.get('source', 'unknown') for doc in documents]
         }
 
+    def _incompatible_message(self) -> Optional[str]:
+        """Message à afficher à l'utilisateur quand l'index existe mais ne peut pas servir."""
+        if self.index_status != "incompatible":
+            return None
+        return INCOMPATIBLE_ANSWER.format(reason=self.index_problem)
+
     def get_index_details(self) -> dict:
         """Retourne les détails complets de l'index FAISS."""
         if not self.vectorstore:
             return {
                 'exists': False,
+                'status': self.index_status,
+                'message': self._incompatible_message(),
                 'total_vectors': 0,
                 'indexed_files': [],
                 'index_path': str(self.index_path)
@@ -246,6 +355,8 @@ class RAGEngine:
 
         return {
             'exists': True,
+            'status': self.index_status,
+            'message': None,
             'total_vectors': total_vectors,
             'indexed_files': sorted(list(indexed_files)),
             'index_path': str(self.index_path),
@@ -345,6 +456,15 @@ Réponds UNIQUEMENT avec un nombre entre 0 et 10, sans explication.""")
                 query_time_ms=0,
                 chunks_found=0,
                 model_used="Aucun"
+            )
+
+        if self.index_status == "incompatible":
+            return QueryResult(
+                answer=self._incompatible_message(),
+                sources=[],
+                query_time_ms=0,
+                chunks_found=0,
+                model_used=self.settings.llm_model
             )
 
         if not self.vectorstore:
@@ -504,7 +624,9 @@ RÉPONSE (avec citations des sources) :""")
             return IndexStats(
                 total_documents=0,
                 total_chunks=0,
-                index_exists=False
+                index_exists=False,
+                status=self.index_status,
+                message=self._incompatible_message()
             )
 
         # FAISS ne stocke pas directement le nombre de documents originaux
@@ -549,7 +671,7 @@ RÉPONSE (avec citations des sources) :""")
 
     def update_embedding_model(self, embedding_model: str) -> bool:
         """
-        Met à jour le modèle d'embedding.
+        Met à jour le modèle d'embedding, sans supprimer l'index existant (il devient incompatible).
         Retourne True si une ré-indexation est nécessaire.
         """
         # Vérifier si le modèle a vraiment changé
@@ -570,20 +692,12 @@ RÉPONSE (avec citations des sources) :""")
             base_url=self.settings.ollama_base_url
         )
 
-        # Supprimer l'index existant car il n'est plus valide
-        # (les embeddings ont changé de dimension/sémantique)
-        if self.index_path.exists():
-            logger.info("Suppression de l'ancien index (incompatible avec le nouveau modèle d'embedding)")
-            try:
-                shutil.rmtree(self.index_path)
-            except Exception as e:
-                logger.error("Erreur lors de la suppression de l'index : %s", e)
+        # L'index existant reste sur le disque (F8, D2) : s'il a été créé avec un autre modèle,
+        # _load_index le déclare incompatible ; si on revient au modèle d'origine, il redevient utilisable.
+        self._load_index()
 
-        # Réinitialiser le vectorstore
-        self.vectorstore = None
-
-        # Retourner True pour indiquer qu'une ré-indexation est nécessaire
-        return True
+        # True tant qu'une ré-indexation est nécessaire
+        return self.index_status != "ok"
 
     def analyze_image_with_vision(self, image_path: str, question: str) -> dict:
         """Analyse une image avec un modèle vision (Ministral 3)."""

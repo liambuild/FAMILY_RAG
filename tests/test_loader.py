@@ -122,6 +122,24 @@ class TestFormats:
         assert "Contenu HTML" not in doc.page_content
         assert "Sujet: Newsletter" in doc.page_content
 
+    @pytest.mark.xfail(reason="F23 : l'en-tête Subject encodé (RFC 2047) doit être décodé (lot 11)")
+    def test_eml_encoded_subject_is_decoded(self, loader, data_dir):
+        raw = (
+            b"Subject: =?utf-8?q?D=C3=AEner_dimanche?=\r\n"
+            b"From: marie@example.org\r\n"
+            b"Content-Type: text/plain; charset=utf-8\r\n\r\n"
+            b"On mange chez nous.\r\n"
+        )
+        (data_dir / "encode.eml").write_bytes(raw)
+        doc = load_one(loader, "encode.eml")
+        assert doc.page_content.startswith("Sujet: Dîner dimanche\n")
+
+    @pytest.mark.xfail(reason="F24 : un court fichier UTF-8 ne doit pas être lu en ISO-8859-1 (lot 11)")
+    def test_txt_short_utf8_is_not_misdetected_as_latin1(self, loader, data_dir):
+        text = "Bonjour à tous, voici une note."
+        (data_dir / "court.txt").write_bytes(text.encode("utf-8"))
+        assert load_one(loader, "court.txt").page_content == text
+
     def test_image_goes_through_ocr_with_french_and_english(self, loader, data_dir):
         Image.new("RGB", (20, 20), "white").save(data_dir / "scan.png")
         with patch("document_loader.pytesseract.image_to_string", return_value="  Texte reconnu \n") as ocr:

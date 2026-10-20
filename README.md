@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/LangChain-0.3-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white" alt="LangChain"/>
+  <img src="https://img.shields.io/badge/LangChain-1.x-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white" alt="LangChain"/>
   <img src="https://img.shields.io/badge/FAISS-Vector_DB-0467DF?style=for-the-badge&logo=meta&logoColor=white" alt="FAISS"/>
   <img src="https://img.shields.io/badge/Ministral_3-Vision-FF6B6B?style=for-the-badge&logo=mistral&logoColor=white" alt="Ministral 3"/>
   <img src="https://img.shields.io/badge/Tesseract-OCR-5A5A5A?style=for-the-badge&logo=google&logoColor=white" alt="Tesseract"/>
@@ -201,9 +201,19 @@ ollama pull nomic-embed-text
 
 ### 3. Lancer
 
+**Mac / Windows (Docker Desktop)** :
+
 ```bash
 docker compose up -d --build
 ```
+
+**Linux** : ajoutez le fichier `docker-compose.linux.yml`. L'application partage alors le réseau de l'hôte, joint Ollama sur `127.0.0.1:11434` et n'écoute elle-même que sur `127.0.0.1` (Docker Compose 2.24.4 ou plus récent requis).
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.linux.yml up -d --build
+```
+
+Ollama n'a besoin d'aucun réglage réseau : il écoute sur `127.0.0.1` par défaut.
 
 ### 4. C'est prêt !
 
@@ -218,7 +228,7 @@ Toutes les variables sont déclarées dans `.env` (copié depuis `.env.example`)
 | Variable | Défaut | Obligatoire | Description |
 |----------|--------|:-----------:|-------------|
 | `HOST_DATA_PATH` | — | ✅ | Chemin absolu vers le dossier de documents sur l'hôte |
-| `OLLAMA_HOST` | `host.docker.internal:11434` | | Adresse du serveur Ollama (`host:port`) — `localhost:11434` sur Linux avec `network_mode: host` |
+| `OLLAMA_HOST` | `host.docker.internal:11434` | | Adresse du serveur Ollama (`host:port`) ; sous Linux, `docker-compose.linux.yml` la fixe à `127.0.0.1:11434` |
 | `EMBEDDING_MODEL` | `nomic-embed-text` | | Modèle Ollama utilisé pour la vectorisation des documents |
 | `LLM_MODEL` | _(auto-détecté)_ | | Modèle de génération Ollama ; si vide, le premier modèle disponible est sélectionné automatiquement |
 | `CHUNK_SIZE` | `1200` | | Taille maximale d'un chunk en caractères |
@@ -226,7 +236,40 @@ Toutes les variables sont déclarées dans `.env` (copié depuis `.env.example`)
 | `TOP_K` | `12` | | Nombre de chunks récupérés par requête RAG avant re-ranking |
 | `TEMPERATURE` | `0.7` | | Créativité du LLM (`0` = précis et factuel, `1` = créatif) |
 
-> **Note Linux** : remplacez `OLLAMA_HOST=host.docker.internal:11434` par `OLLAMA_HOST=localhost:11434` et décommentez `network_mode: host` dans `docker-compose.yml`.
+> **Accès réseau** : l'application n'a pas d'authentification. Le port est lié à `127.0.0.1` : seule la machine qui l'héberge y accède. Ne le publiez pas sur le réseau local. Un `docker run -p 8000:8000` lancé hors compose l'exposerait sur toutes les interfaces ; utilisez `-p 127.0.0.1:8000:8000`.
+
+### Mise à jour depuis une version précédente (lots 2 et 2b)
+
+Si vous avez déjà une installation, vérifiez ces points avant de reconstruire l'image (`docker compose up --build`) :
+
+- **`LLM_MODEL`, `TOP_K` et `TEMPERATURE` sont désormais pris en compte.** Jusqu'ici, `docker-compose.yml` ne les transmettait pas au conteneur : leurs valeurs dans `.env` étaient ignorées. Relisez-les : si elles diffèrent des défauts (modèle auto-détecté, `12`, `0.7`), le comportement de l'application changera.
+- **`OLLAMA_HOST` est testé en premier** au démarrage. Avant, `host.docker.internal` l'emportait s'il répondait, même si vous aviez choisi une autre adresse.
+- **Un index illisible n'est plus supprimé au démarrage.** Il reste sur le volume `family-rag-index` et l'erreur est écrite dans les journaux. Il est alors traité comme un index incompatible (voir ci-dessous).
+- L'image n'embarque plus `libmagic1` ni `poppler-utils`, qui n'étaient pas utilisés.
+- **Réseau (lot 2b).** L'ancienne consigne Linux (décommenter `network_mode: host` dans `docker-compose.yml`) rendait l'application et tous vos documents accessibles à tout le réseau local, sans authentification. Elle est retirée. Si vous l'aviez suivie, remettez `docker-compose.yml` dans son état d'origine (`git checkout docker-compose.yml`) et lancez avec `-f docker-compose.yml -f docker-compose.linux.yml`.
+- **`ollama-override.conf` est supprimé** : il faisait écouter Ollama sur `0.0.0.0`, donc sur tout le réseau. Si vous l'aviez installé (`/etc/systemd/system/ollama.service.d/`), supprimez-le puis `sudo systemctl daemon-reload && sudo systemctl restart ollama`. Les modèles et vos index ne sont pas touchés.
+- **Dépendances (lot 3).** pypdf, Pillow, jinja2, python-docx et psutil passent à des versions corrigées (pypdf et Pillow cumulaient des dizaines d'avis de sécurité, dont des dénis de service par PDF ou image piégés). Reconstruisez l'image (`docker compose up -d --build`). Ce lot ne modifie pas le format de l'index.
+- **Serveur web (lot 4).** FastAPI, Starlette, Uvicorn et Pydantic passent à des versions corrigées (Starlette 0.41.3 cumulait 7 avis de sécurité), et l'image repose désormais sur `python:3.11.17-slim-trixie` au lieu de `python:3.11-slim`. Reconstruisez l'image (`docker compose up -d --build`). Ce lot ne modifie pas le format de l'index. L'API et l'interface sont inchangées (mais voir ci-dessous « Mettre à jour depuis v1-legacy »).
+- L'adresse d'écoute de l'application est la variable `APP_HOST` (défaut `0.0.0.0` dans le conteneur, ce qui est nécessaire en mode bridge ; l'exposition reste limitée par `127.0.0.1:8000:8000`). Docker Desktop : rien à changer.
+
+### Mettre à jour depuis v1-legacy : réindexation nécessaire (lot 4b)
+
+**Votre index existant sera déclaré « incompatible » après la mise à jour, et vous devrez réindexer vos documents.** C'est voulu : l'application écrit désormais un fichier `index_meta.json` à côté de l'index (version du format, modèle et dimension d'embedding, versions de `langchain-core` et de `faiss-cpu`). Un index sans ce fichier, ou créé avec d'autres versions ou un autre modèle d'embedding, n'est plus chargé : son format interne (pickle) n'est pas garanti d'une version à l'autre, et les prochaines mises à jour de LangChain le casseraient.
+
+**Rien n'est supprimé ni réindexé automatiquement.** L'index reste intact sur le volume `family-rag-index` tant que vous n'avez pas lancé vous-même une indexation.
+
+1. **Sauvegardez le volume** avant la mise à jour (voir la section « Sauvegarde » de [MANAGE.md](MANAGE.md)) :
+   ```bash
+   docker run --rm -v family-rag-index:/source:ro -v "$(pwd)/backups":/backup      alpine tar czf /backup/index-avant-maj.tar.gz -C /source .
+   ```
+2. Mettez à jour et reconstruisez : `docker compose up -d --build` (sous Linux, ajoutez `-f docker-compose.linux.yml`).
+3. Ouvrez l'interface : un bandeau orange « Index incompatible : ré-indexation requise » s'affiche dans l'onglet Documents, et `/api/stats` renvoie `"status": "incompatible"` avec une explication. Une question posée à ce stade reçoit le même message au lieu d'une erreur.
+4. Cliquez sur **Indexer**. Quand l'indexation réussit, l'index est reconstruit et le bandeau disparaît. Si elle échoue (Ollama arrêté, par exemple), l'ancien index n'est pas touché.
+5. En cas de problème, restaurez la sauvegarde (voir MANAGE.md) et revenez à la version précédente.
+
+**LangChain 1.x (lot 5).** Cette version migre LangChain de 0.3 vers 1.x (`langchain-core` 1.6, `langchain-community` 0.4, `langchain-ollama` 1.1, `faiss-cpu` 1.15). Le format interne de l'index n'est pas garanti d'une version à l'autre : un index créé avec LangChain 0.3 est donc déclaré incompatible et doit être reconstruit, comme décrit ci-dessus. Si vous passez directement de v1-legacy à cette version, **une seule réindexation** suffit. Reconstruisez l'image (`docker compose up -d --build`).
+
+**Changer de modèle d'embedding** (réglages) ne supprime plus l'index non plus : il est déclaré incompatible jusqu'à la réindexation, et redevient utilisable si vous revenez au modèle d'origine. Le modèle choisi dans l'interface n'est toujours pas mémorisé après un redémarrage (il revient à la valeur de `.env`).
 
 ---
 
@@ -246,6 +289,18 @@ Les tests ne requièrent **ni Ollama ni FAISS** — le moteur RAG est entièreme
 |---------|------------|
 | `tests/test_security.py` | Traversées de répertoire (LFI) sur `DocumentLoader` et `RAGEngine` — 13 tests |
 | `tests/test_api.py` | Routes FastAPI principales + gestion des erreurs — 27 tests |
+
+---
+
+## 📏 Mesurer la qualité des réponses
+
+`eval/` contient un petit corpus fictif, 15 questions de référence et un script de mesure (latence, source retrouvée, recall@k, éléments clés, citations). Il nécessite Ollama et n'est **pas** lancé par `pytest`. Il travaille sur un index temporaire : votre index et vos documents ne sont jamais touchés.
+
+```bash
+python eval/run_eval.py --label ma-machine --llm <votre-modele-de-chat>
+```
+
+Voir [eval/README.md](eval/README.md). Cet ajout ne change ni le comportement de l'application ni le format de l'index.
 
 ---
 

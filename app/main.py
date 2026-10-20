@@ -73,7 +73,7 @@ class VisionBase64Request(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Page d'accueil avec l'interface web."""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 @app.get("/health")
@@ -189,7 +189,9 @@ async def get_stats():
         "index": {
             "exists": stats.index_exists,
             "total_documents": stats.total_documents,
-            "total_chunks": stats.total_chunks
+            "total_chunks": stats.total_chunks,
+            "status": stats.status,
+            "message": stats.message
         },
         "settings": {
             "embedding_model": settings.embedding_model,

@@ -173,8 +173,8 @@ Vérification du 15/10/2026. « Transitif » = version effectivement résolue pa
 | F20 | Basse | `main.py:126-133` | Une exception d'indexation renvoie HTTP **200** avec `success:false`, contre 400 pour l'autre chemin d'erreur. Les tests figent ce comportement (`test_api.py:224-232`). |
 | F21 | Basse | `index.html:1191-1215` | Barre de progression simulée (aléatoire). « Suspendre » coupe la requête côté navigateur mais l'indexation continue sur le serveur. |
 | F22 | Info | `main.py:50` ; `index.html` | `QueryRequest.image_data` n'est jamais utilisé. Les « conversations » n'envoient pas l'historique : chaque question est traitée isolément. |
-| F23 | Basse | `document_loader.py:358-359` | E-mails : l'en-tête `Subject` encodé (RFC 2047, par exemple `=?utf-8?q?D=C3=AEner?=`) est recopié tel quel dans « Sujet: » : `msg['subject']` n'est pas décodé. *Repéré au lot 1, non corrigé.* |
-| F24 | Moyenne | `document_loader.py:337-342` | Fichiers texte : `chardet` classe en ISO-8859-1 (confiance 0,73) un fichier UTF-8 court qui contient peu de caractères accentués, et « à » devient « Ã  » dans l'index. Vérifié avec la version installée (`Bonjour à tous, voici une note.`). *Repéré au lot 1, non corrigé.* |
+| F23 | Basse | `document_loader.py:358-359` | E-mails : l'en-tête `Subject` encodé (RFC 2047, par exemple `=?utf-8?q?D=C3=AEner?=`) est recopié tel quel dans « Sujet: » : `msg['subject']` n'est pas décodé. *Repéré au lot 1, non corrigé ; corrigé au lot 11 (`xfail` : `test_loader.py::test_eml_encoded_subject_is_decoded`).* |
+| F24 | **Haute** | `document_loader.py:337-342` | Fichiers texte : `chardet` classe en ISO-8859-1 (confiance 0,73) un fichier UTF-8 court qui contient peu de caractères accentués, et « à » devient « Ã  » dans l'index. Vérifié avec la version installée (`Bonjour à tous, voici une note.`). Gravité relevée : pour un corpus majoritairement français, la corruption des accents dégrade directement la recherche. *Repéré au lot 1, non corrigé ; corrigé au lot 11 (`xfail` : `test_loader.py::test_txt_short_utf8_is_not_misdetected_as_latin1`).* |
 
 ### 3.3 Performance
 
@@ -292,20 +292,20 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 | Lot | Branche | Objet | Prérequis | Effort |
 |---|---|---|---|---|
 | 1 ✅ | `lot-1` | Tests qui protègent le comportement actuel | — | 1 session |
-| 1b | `lot-1b` | Corpus de test, 15 questions, script de mesure, référence `v1-legacy` | 1 | 1 session |
-| 2 | `lot-2` | Dépendances mortes, configuration, entrypoint, **plus de suppression automatique d'index** | 1 | 1–2 h |
-| 2b | `lot-2b` | Réseau local par défaut, override Linux (SEC13, SEC4) | 2 | 1–2 h |
-| 3 | `lot-3` | pypdf, Pillow, jinja2, python-docx, psutil | 2 | 1 h |
-| 4 | `lot-4` | fastapi, starlette, uvicorn, pydantic, image `python:3.11.17-slim-trixie` | 3 | 1–2 h |
-| 4b | `lot-4b` | `index_meta.json`, détection d'incompatibilité, README « Mettre à jour depuis v1-legacy » | 4 | 1 session |
-| 5 | `lot-5` | Migration LangChain 1.x | **⛔ 4b fusionné** | 1 session |
+| 1b ✅ | `lot-1b` | Corpus de test, 15 questions, script de mesure (la référence `v1-legacy` reste à produire, voir point ouvert) | 1 | 1 session |
+| 2 ✅ | `lot-2` | Dépendances mortes, configuration, entrypoint, **plus de suppression automatique d'index** | 1 | 1–2 h |
+| 2b ✅ | `lot-2b` | Réseau local par défaut, override Linux (SEC13, SEC4) | 2 | 1–2 h |
+| 3 ✅ | `lot-3` | pypdf, Pillow, jinja2, python-docx, psutil | 2 | 1 h |
+| 4 ✅ | `lot-4` | fastapi, starlette, uvicorn, pydantic, image `python:3.11.17-slim-trixie` | 3 | 1–2 h |
+| 4b ✅ | `lot-4b` | `index_meta.json`, détection d'incompatibilité, README « Mettre à jour depuis v1-legacy » | 4 | 1 session |
+| 5 ✅ | `lot-5` | Migration LangChain 1.x | **⛔ 4b fusionné** | 1 session |
 | 6 | `lot-6` | F2, F12, F13, F14 | 5 | 1 session |
 | 7 | `lot-7` | F3, F4 (`NUM_CTX`), F5, F6 | 6 | 1 session |
 | 7b | `lot-7b` | `settings.json`, l'interface l'emporte sur `.env` | 4b | 1 session |
 | 8 | `lot-8` | Re-ranking désactivé par défaut, timeout réel (S1, S3, P1) | 7, 7b | 1 session |
 | 9 | `lot-9` | F1, **F7**, S2, S4, S5, P2 | 4b, 5 | 1–2 sessions |
 | 10 | `lot-10` | SEC3, SEC5, SEC7, SEC9, S7, F11, F20 | 4 | 1 session |
-| 11 | `lot-11` | F15, F16 (tableaux DOCX), F17, F18 ; OCR des PDF scannés documenté comme option | 9 | 1 session |
+| 11 | `lot-11` | F15, F16 (tableaux DOCX), F17, F18, **F23, F24** ; OCR des PDF scannés documenté comme option | 9 | 1 session |
 | 12 | `lot-12` | Documentation, progression réelle, Alpine, CSS Tailwind (optionnel) | — | variable |
 
 ### Lot 1 — Filet de sécurité : tests de caractérisation *(aucun changement de code applicatif)* ✅ Fait
@@ -316,7 +316,7 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 - **Contrat API ↔ moteur** : quelques tests de bout en bout sur un vrai `RAGEngine` avec les faux modèles.
 - *Fini quand* : tous les tests passent sur `v1-legacy`, sans réseau, en moins de 30 s.
 
-**Résultat (lot 1).** `.venv/bin/python -m pytest -q` : 139 tests passent et 9 `xfail(strict=True)` échouent comme prévu, en environ 3 s. La suite passe aussi sur le tag `v1-legacy` (`app/` est inchangé). Une garde dans `conftest.py` refuse toute connexion sortante. `requirements-dev.txt` contient `pytest==9.1.1` seul (version vérifiée sur PyPI).
+**Résultat (lot 1).** `.venv/bin/python -m pytest -q` : 139 tests passent et 11 `xfail(strict=True)` échouent comme prévu, en environ 3 s. La suite passe aussi sur le tag `v1-legacy` (`app/` est inchangé). Une garde dans `conftest.py` refuse toute connexion sortante. `requirements-dev.txt` contient `pytest==9.1.1` seul (version vérifiée sur PyPI).
 
 Chaque `xfail` devient un test normal dans le lot indiqué, qui retire alors le marqueur (`xfail_strict` fait échouer la suite sinon) :
 
@@ -325,49 +325,62 @@ Chaque `xfail` devient un test normal dans le lot indiqué, qui retire alors le 
 | `test_splitter.py::test_table_chunk_appears_once`, `::test_list_block_appears_once` | F2 | — | 6 |
 | `test_splitter.py::test_section_metadata_is_the_chunk_own_title` | F12 | — | 6 |
 | `test_engine_index.py::test_unreadable_index_is_left_in_place` | S6 | D2, D12 | 2 |
-| `test_engine_index.py::test_new_model_keeps_the_existing_index_on_disk` | F8 | D2 | 4b |
+| `test_engine_index.py::test_new_model_asks_for_reindexing_but_keeps_the_index` (ex-xfail) | F8 | D2 | 4b ✅ |
 | `test_engine_query.py::test_each_extract_is_prefixed_with_its_source` | F3 | — | 7 |
 | `test_engine_query.py::test_selected_source_is_found_wherever_it_ranks` | F5 | — | 7 |
 | `test_loader.py::test_source_is_the_relative_path` | F7 | D5 | 9 |
+| `test_loader.py::test_eml_encoded_subject_is_decoded` | F23 | — | 11 |
+| `test_loader.py::test_txt_short_utf8_is_not_misdetected_as_latin1` | F24 | — | 11 |
 | `test_engine_index.py::test_selective_indexing_adds_to_the_existing_index` | F1 | D1 | 9 |
 
 Les tests de caractérisation qui figent un comportement corrigé plus tard portent la mention du constat et du lot dans leur docstring (F6, F7, F8, F13, F14, F15, F16, F17, F18, F19). Les lots concernés les mettent à jour explicitement.
 
-### Lot 1b — Mesure de qualité reproductible *(nouveau, D4)*
-- `eval/corpus/` : documents fictifs versionnés (PDF texte, DOCX avec tableau, `.eml`, image pour l'OCR, Markdown avec listes et tableau, deux `facture.pdf` homonymes dans deux sous-dossiers).
+### Lot 1b — Mesure de qualité reproductible *(nouveau, D4)* ✅ Fait (outil livré)
+- `eval/corpus/` : documents fictifs versionnés (PDF texte, DOCX avec tableau, `.eml`, image pour l'OCR, Markdown avec listes et tableau, deux `facture.pdf` homonymes dans deux sous-dossiers) et 48 documents distracteurs (`distracteurs/`), pour dépasser 4 × `top_k` extraits indexés.
 - `eval/questions.yaml` : 15 questions avec réponse et source(s) attendues, proposées dans la PR pour validation.
-- `eval/run_eval.py` (hors pytest, Ollama requis) : latence p50/p95, source attendue retrouvée, éléments clés présents dans la réponse, citations valides.
-- Mesure de référence sur `v1-legacy`, enregistrée avec la machine et les modèles utilisés.
+- `eval/run_eval.py` (hors pytest, Ollama requis) : latence p50/p95, source attendue retrouvée, éléments clés présents dans la réponse, citations valides, source attendue citée (F3). Mode `--retrieval-only` : rang des sources attendues et recall@k, sans génération.
+- `tests/test_eval.py` : tests de la partie sans Ollama (corpus, éléments clés, abstention, recall@k, citations).
+- Le re-ranking activé n'est pas mesurable tant que S1 n'est pas corrigé (lot 8) ; le script le signale.
+- **Point ouvert — mesure de référence non produite.** Aucune mesure n'a été exécutée pendant ce lot. Elle reste à produire sur une machine disposant d'Ollama (`v1-legacy` puis branche courante, procédure dans `eval/README.md`) et à ranger dans `eval/results/v1-legacy*.json`. En attendant, les lots 6 à 9 se valident par leurs tests et leurs `xfail` (DECISIONS.md, D4).
 
-### Lot 2 — Hygiène sans risque
+### Lot 2 — Hygiène sans risque ✅ Fait
 - Retirer `python-multipart`, `aiofiles`, `python-magic`, `libmagic1` et `poppler-utils` (D9).
 - Nettoyer `.gitignore:1` ; migrer `class Config` → `model_config` ; passer `TemplateResponse(request, "index.html")`.
 - Transmettre `LLM_MODEL`, `TOP_K` et `TEMPERATURE` dans `docker-compose.yml` (F9) ; tester `OLLAMA_HOST` en premier dans `entrypoint.sh` (F10).
 - **S6** *(déplacé depuis le lot 9)* : un index illisible est laissé en place, l'erreur est journalisée, plus aucun `rmtree` au chargement.
+- *Note de fin de lot.* Un index illisible laissé en place est remplacé par `save_local` à la prochaine indexation demandée par l'utilisateur (jamais automatiquement) ; l'état « index incompatible » arrive au lot 4b. `update_embedding_model` supprime encore l'index (F8, lot 4b) : non touché ici.
 
-### Lot 2b — Réseau local par défaut *(nouveau, D7)*
+### Lot 2b — Réseau local par défaut *(nouveau, D7)* ✅ Fait
 - Variable `APP_HOST` pour l'adresse d'écoute d'uvicorn. Par défaut `0.0.0.0` dans le conteneur, ce qu'exige le mode bridge, l'exposition restant limitée par le mappage `127.0.0.1:8000:8000`.
 - `docker-compose.linux.yml` : `network_mode: host`, `OLLAMA_HOST=127.0.0.1:11434`, `APP_HOST=127.0.0.1`.
 - Docker Desktop : comportement inchangé (bridge + `host.docker.internal`). Accès à un Ollama limité à `127.0.0.1` à vérifier sur Mac et Windows.
 - Retirer le conseil `network_mode: host` du compose principal ; réécrire `README.md:221,229` et `MANAGE.md:341` ; retirer `ollama-override.conf` (SEC4).
+- *Note de fin de lot.* Non vérifié : l'override Linux n'a pas été lancé de bout en bout (seul `docker compose config` a validé la fusion) ; Docker Desktop (Mac et Windows) avec un Ollama limité à `127.0.0.1` reste à tester par quelqu'un qui dispose de ces plateformes. L'override exige Docker Compose ≥ 2.24.4 (`!reset`).
 
-### Lot 3 — Correctifs de sécurité des dépendances
+### Lot 3 — Correctifs de sécurité des dépendances ✅ Fait
 - pypdf 6.20.1, Pillow 12.3.0, jinja2 3.1.6, python-docx 1.2.0, psutil 7.2.2.
+- *Note de fin de lot (versions revérifiées le 20/10/2026 sur PyPI et OSV).* Zéro avis OSV sur chacune de ces versions. Deux versions plus récentes existent depuis l'audit : pypdf 6.21.1 (17/10) et **Pillow 13.0.0** (16/10, majeure). Elles n'ont pas été retenues : correctifs de sécurité seulement dans ce lot, et une majeure vieille de quatre jours n'a pas sa place dans une montée « sans risque ». À reconsidérer plus tard. Vérifié : suite de tests, `pip check`, build de l'image, et dans l'image l'OCR (Pillow 12.3.0 + Tesseract) sur `eval/corpus/recette_scan.png`, la lecture d'un PDF et d'un DOCX.
 
-### Lot 4 — FastAPI / Starlette / Uvicorn / Pydantic
+### Lot 4 — FastAPI / Starlette / Uvicorn / Pydantic ✅ Fait
 - fastapi 0.143.1 (starlette 1.x), uvicorn 0.54.0, pydantic 2.14.1, pydantic-settings 2.16.0.
 - Image `python:3.11.17-slim-trixie` (D8).
+- *Note de fin de lot (versions revérifiées le 20/10/2026 sur PyPI, OSV et Docker Hub).* 0 avis OSV sur chaque version. `starlette==1.8.0` est épinglé dans `requirements.txt` : fastapi n'exige que `starlette>=0.46`, sans cet épinglage le correctif de SEC8 ne serait pas garanti et le build ne serait pas reproductible. Plus récents que le plan : fastapi 0.151.0 (20/10) et starlette 1.9.0 (18/10), non retenus (publiés depuis quelques jours). Vérifié : tests, `pip check`, build de l'image, et dans le conteneur démarrage, `/`, `/health`, `/static/…`, `/api/files`, OCR Tesseract.
+- **Hors lot, à proposer.** `starlette.testclient` signale que l'usage de `httpx` est déprécié au profit de `httpx2` : un avertissement dans les tests seulement. Le changer ajouterait une dépendance de test : à décider, non fait.
 
-### Lot 4b — Compatibilité d'index *(nouveau, D2)*
+### Lot 4b — Compatibilité d'index *(nouveau, D2)* ✅ Fait
 - `index_meta.json` écrit à chaque sauvegarde : version du format, modèle et dimension d'embedding, versions de `langchain-core` et `faiss-cpu`, date.
 - Si le fichier est absent ou différent : l'index n'est ni chargé ni supprimé, l'état « index incompatible » est exposé par l'API et affiché dans l'interface, et les requêtes renvoient un message demandant de réindexer.
 - `update_embedding_model` ne supprime plus l'index (F8) : il le rend incompatible jusqu'à la réindexation.
 - README : section « Mettre à jour depuis v1-legacy » (sauvegarde conseillée du volume `family-rag-index`, réindexation).
+- *Note de fin de lot.* Choix : l'égalité des versions de `langchain-core` et de `faiss-cpu` est **exacte** (D2 : « différent de ce qu'attend le code ») ; tout changement de ces paquets, y compris un patch, rend les index existants incompatibles. Le lot 5 les change donc : les index créés au lot 4b devront être reconstruits une fois de plus. Les noms de modèles sont comparés sans le tag implicite `:latest`. F8 reste ouvert pour sa seconde moitié (modèle choisi non persisté après redémarrage, lot 7b). Tests : `tests/test_index_compat.py`. Non vérifié dans un navigateur : le bandeau de l'interface (HTML Alpine) n'est couvert que par les tests de l'API qui l'alimente.
 
-### Lot 5 — Migration LangChain 1.x
+### Lot 5 — Migration LangChain 1.x ✅ Fait
 - **⛔ Prérequis bloquant : lot 4b fusionné dans `modernisation`** (DECISIONS.md, D12).
 - Imports `langchain_core.documents`, `langchain_core.prompts` et `langchain_text_splitters` ; retrait de `langchain` ; langchain-community 0.4.2, langchain-ollama 1.1.0, faiss-cpu 1.15.1.
 - Un index `v1-legacy` est signalé incompatible, jamais supprimé.
+- *Note de fin de lot (versions revérifiées le 20/10/2026 sur PyPI et OSV).* 0 avis OSV sur chaque version retenue et sur les dépendances résolues vérifiées (aiohttp, SQLAlchemy, langsmith, requests, orjson, urllib3, ollama, numpy). Choix : **langchain-core 1.6.10** (plan ; 1.6.12 existe depuis le 16/10, non retenue) ; **langchain-core et langchain-text-splitters sont désormais épinglés explicitement** (l'application les importe directement et `index_meta.json` compare la version de langchain-core) ; **numpy épinglé à 2.4.6** : sans cela, un build neuf résout 2.4.6 alors que l'environnement de test restait en 1.26.4 (la contrainte `<2` de langchain 0.3 disparaît). `langchain-community` 0.4.2 tire `langchain-classic`, SQLAlchemy et aiohttp (prévu par l'audit).
+- **Vérifié** : suite de tests dans un environnement recréé de zéro à partir des fichiers requirements ; `pip check` ; build de l'image ; dans l'image, avec un faux serveur Ollama local (protocole `/api/embed` et `/api/chat` en flux) : indexation du corpus `eval/`, requête, compteurs d'usage lus par `eval/run_eval.py`, redémarrage avec rechargement de l'index. **Non vérifié : un vrai Ollama** (aucun n'est disponible ici) ; seul son protocole a été simulé.
+- **Hors lot, à décider.** `langchain-community` affiche un avertissement : le paquet est en cours d'abandon (« sunset ») au profit de paquets d'intégration autonomes. Il ne sert ici qu'à `FAISS`. Un paquet `langchain-faiss` (0.1.1) existe sur PyPI mais est très jeune ; l'adopter ajouterait une dépendance et changerait peut-être le format de l'index : à proposer, non fait. À surveiller avant de figer la suite du plan.
 
 ### Lot 6 — Corrections du splitter
 - F2, F12, F13, F14. Les `xfail` correspondants du lot 1 passent au vert. Mesure via le lot 1b.
@@ -384,7 +397,7 @@ Les tests de caractérisation qui figent un comportement corrigé plus tard port
 ### Lot 8 — Re-ranking maîtrisé
 - `RERANKING_ENABLED=false` par défaut, interrupteur dans les réglages (persisté via 7b).
 - Vrai timeout (côté `ChatOllama`/httpx), plafond de candidats, timeout sur la génération (S1, S3, P1).
-- Mesure via le lot 1b, avec et sans re-ranking, au regard de l'objectif indicatif de 15 s.
+- Mesure via le lot 1b, avec et sans re-ranking, au regard du budget en tokens de prompt (D4, révisé ; le temps mesuré reste indicatif).
 
 ### Lot 9 — Index incrémental et robuste
 - Indexation **incrémentale** : cocher des fichiers les ajoute ou remplace leurs chunks, sans jamais effacer le reste (F1, D1) ; suppression des fichiers disparus.
@@ -397,6 +410,7 @@ Les tests de caractérisation qui figent un comportement corrigé plus tard port
 
 ### Lot 11 — Ingestion
 - E-mails HTML et charsets inconnus (F15), tableaux DOCX (F16), dates normalisées et classification (F17), journalisation et factorisation de `load_all`/`load_specific` (F18).
+- **F23** *(repéré au lot 1)* : décoder l'en-tête `Subject` encodé (RFC 2047). **F24** *(repéré au lot 1, gravité Haute)* : détection d'encodage des fichiers texte (essayer UTF-8 strict avant `chardet`). Les deux `xfail` du lot 1 passent alors au vert.
 - OCR de repli pour les PDF scannés : **décrit comme option, non implémenté** (D9).
 
 ### Lot 12 — Finitions *(optionnel)*

@@ -1,12 +1,10 @@
-FROM python:3.11-slim
+FROM python:3.11.17-slim-trixie
 
 WORKDIR /app
 
 # Dépendances système pour les parsers de documents + OCR
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    libmagic1 \
-    poppler-utils \
     tesseract-ocr \
     tesseract-ocr-fra \
     tesseract-ocr-eng \
@@ -31,4 +29,6 @@ EXPOSE 8000
 
 # Utiliser l'entrypoint pour la détection automatique d'Ollama
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# L'adresse d'écoute vient de APP_HOST (entrypoint.sh) : 0.0.0.0 dans le conteneur par défaut,
+# l'exposition réelle étant limitée par le mappage 127.0.0.1:8000:8000 du compose.
+CMD ["uvicorn", "main:app", "--port", "8000"]

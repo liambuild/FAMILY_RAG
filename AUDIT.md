@@ -296,7 +296,7 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 | 2 ✅ | `lot-2` | Dépendances mortes, configuration, entrypoint, **plus de suppression automatique d'index** | 1 | 1–2 h |
 | 2b ✅ | `lot-2b` | Réseau local par défaut, override Linux (SEC13, SEC4) | 2 | 1–2 h |
 | 3 ✅ | `lot-3` | pypdf, Pillow, jinja2, python-docx, psutil | 2 | 1 h |
-| 4 | `lot-4` | fastapi, starlette, uvicorn, pydantic, image `python:3.11.17-slim-trixie` | 3 | 1–2 h |
+| 4 ✅ | `lot-4` | fastapi, starlette, uvicorn, pydantic, image `python:3.11.17-slim-trixie` | 3 | 1–2 h |
 | 4b | `lot-4b` | `index_meta.json`, détection d'incompatibilité, README « Mettre à jour depuis v1-legacy » | 4 | 1 session |
 | 5 | `lot-5` | Migration LangChain 1.x | **⛔ 4b fusionné** | 1 session |
 | 6 | `lot-6` | F2, F12, F13, F14 | 5 | 1 session |
@@ -361,9 +361,11 @@ Les tests de caractérisation qui figent un comportement corrigé plus tard port
 - pypdf 6.20.1, Pillow 12.3.0, jinja2 3.1.6, python-docx 1.2.0, psutil 7.2.2.
 - *Note de fin de lot (versions revérifiées le 20/10/2026 sur PyPI et OSV).* Zéro avis OSV sur chacune de ces versions. Deux versions plus récentes existent depuis l'audit : pypdf 6.21.1 (17/10) et **Pillow 13.0.0** (16/10, majeure). Elles n'ont pas été retenues : correctifs de sécurité seulement dans ce lot, et une majeure vieille de quatre jours n'a pas sa place dans une montée « sans risque ». À reconsidérer plus tard. Vérifié : suite de tests, `pip check`, build de l'image, et dans l'image l'OCR (Pillow 12.3.0 + Tesseract) sur `eval/corpus/recette_scan.png`, la lecture d'un PDF et d'un DOCX.
 
-### Lot 4 — FastAPI / Starlette / Uvicorn / Pydantic
+### Lot 4 — FastAPI / Starlette / Uvicorn / Pydantic ✅ Fait
 - fastapi 0.143.1 (starlette 1.x), uvicorn 0.54.0, pydantic 2.14.1, pydantic-settings 2.16.0.
 - Image `python:3.11.17-slim-trixie` (D8).
+- *Note de fin de lot (versions revérifiées le 20/10/2026 sur PyPI, OSV et Docker Hub).* 0 avis OSV sur chaque version. `starlette==1.8.0` est épinglé dans `requirements.txt` : fastapi n'exige que `starlette>=0.46`, sans cet épinglage le correctif de SEC8 ne serait pas garanti et le build ne serait pas reproductible. Plus récents que le plan : fastapi 0.151.0 (20/10) et starlette 1.9.0 (18/10), non retenus (publiés depuis quelques jours). Vérifié : tests, `pip check`, build de l'image, et dans le conteneur démarrage, `/`, `/health`, `/static/…`, `/api/files`, OCR Tesseract.
+- **Hors lot, à proposer.** `starlette.testclient` signale que l'usage de `httpx` est déprécié au profit de `httpx2` : un avertissement dans les tests seulement. Le changer ajouterait une dépendance de test : à décider, non fait.
 
 ### Lot 4b — Compatibilité d'index *(nouveau, D2)*
 - `index_meta.json` écrit à chaque sauvegarde : version du format, modèle et dimension d'embedding, versions de `langchain-core` et `faiss-cpu`, date.

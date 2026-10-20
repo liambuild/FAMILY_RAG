@@ -29,6 +29,9 @@ versionnage selon [Semantic Versioning](https://semver.org/lang/fr/).
 
 - `app/requirements.txt`, `Dockerfile` — lot 4 : fastapi 0.115.6 → 0.143.1, starlette 0.41.3 → 1.8.0 (désormais épinglé explicitement), uvicorn 0.34.0 → 0.54.0, pydantic 2.10.4 → 2.14.1, pydantic-settings 2.7.1 → 2.16.0, image `python:3.11-slim` → `python:3.11.17-slim-trixie`. Corrige les 7 avis de sécurité de starlette 0.41.3 (SEC8). Aucun avis OSV connu sur les nouvelles versions (20/10/2026). Format d'index inchangé.
 
+- `app/rag_engine.py` — lot 4b (D2) : `index_meta.json` écrit à chaque sauvegarde (version du format, modèle et dimension d'embedding, versions de `langchain-core` et `faiss-cpu`, date). Un index absent de ce fichier, ou différent de ce qu'attend le code, n'est ni chargé ni supprimé : l'état « incompatible » est exposé par `/api/stats` (`index.status`, `index.message`) et `/api/index/details`, affiché dans l'interface, et les requêtes renvoient un message demandant de réindexer. **Les index créés par `v1-legacy` sont donc incompatibles : réindexation à faire** (voir README).
+- `update_embedding_model` ne supprime plus l'index (F8) : il le déclare incompatible jusqu'à la réindexation, et le recharge si l'on revient au modèle d'origine.
+
 ### Ajouté (lot 2b)
 - `docker-compose.linux.yml` — override Linux : `network_mode: host`, Ollama et application sur `127.0.0.1`
 

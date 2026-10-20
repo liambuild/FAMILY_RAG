@@ -244,13 +244,30 @@ Si vous avez déjà une installation, vérifiez ces points avant de reconstruire
 
 - **`LLM_MODEL`, `TOP_K` et `TEMPERATURE` sont désormais pris en compte.** Jusqu'ici, `docker-compose.yml` ne les transmettait pas au conteneur : leurs valeurs dans `.env` étaient ignorées. Relisez-les : si elles diffèrent des défauts (modèle auto-détecté, `12`, `0.7`), le comportement de l'application changera.
 - **`OLLAMA_HOST` est testé en premier** au démarrage. Avant, `host.docker.internal` l'emportait s'il répondait, même si vous aviez choisi une autre adresse.
-- **Un index illisible n'est plus supprimé au démarrage.** Il reste sur le volume `family-rag-index` et l'erreur est écrite dans les journaux. Sauvegardez le volume avant de réindexer ; la prochaine indexation que vous demandez remplace son contenu.
+- **Un index illisible n'est plus supprimé au démarrage.** Il reste sur le volume `family-rag-index` et l'erreur est écrite dans les journaux. Il est alors traité comme un index incompatible (voir ci-dessous).
 - L'image n'embarque plus `libmagic1` ni `poppler-utils`, qui n'étaient pas utilisés.
 - **Réseau (lot 2b).** L'ancienne consigne Linux (décommenter `network_mode: host` dans `docker-compose.yml`) rendait l'application et tous vos documents accessibles à tout le réseau local, sans authentification. Elle est retirée. Si vous l'aviez suivie, remettez `docker-compose.yml` dans son état d'origine (`git checkout docker-compose.yml`) et lancez avec `-f docker-compose.yml -f docker-compose.linux.yml`.
 - **`ollama-override.conf` est supprimé** : il faisait écouter Ollama sur `0.0.0.0`, donc sur tout le réseau. Si vous l'aviez installé (`/etc/systemd/system/ollama.service.d/`), supprimez-le puis `sudo systemctl daemon-reload && sudo systemctl restart ollama`. Les modèles et vos index ne sont pas touchés.
-- **Dépendances (lot 3).** pypdf, Pillow, jinja2, python-docx et psutil passent à des versions corrigées (pypdf et Pillow cumulaient des dizaines d'avis de sécurité, dont des dénis de service par PDF ou image piégés). Reconstruisez l'image (`docker compose up -d --build`). Le format de l'index ne change pas : pas de réindexation à faire.
-- **Serveur web (lot 4).** FastAPI, Starlette, Uvicorn et Pydantic passent à des versions corrigées (Starlette 0.41.3 cumulait 7 avis de sécurité), et l'image repose désormais sur `python:3.11.17-slim-trixie` au lieu de `python:3.11-slim`. Reconstruisez l'image (`docker compose up -d --build`). Le format de l'index ne change pas : pas de réindexation à faire. L'API et l'interface sont inchangées.
+- **Dépendances (lot 3).** pypdf, Pillow, jinja2, python-docx et psutil passent à des versions corrigées (pypdf et Pillow cumulaient des dizaines d'avis de sécurité, dont des dénis de service par PDF ou image piégés). Reconstruisez l'image (`docker compose up -d --build`). Ce lot ne modifie pas le format de l'index.
+- **Serveur web (lot 4).** FastAPI, Starlette, Uvicorn et Pydantic passent à des versions corrigées (Starlette 0.41.3 cumulait 7 avis de sécurité), et l'image repose désormais sur `python:3.11.17-slim-trixie` au lieu de `python:3.11-slim`. Reconstruisez l'image (`docker compose up -d --build`). Ce lot ne modifie pas le format de l'index. L'API et l'interface sont inchangées (mais voir ci-dessous « Mettre à jour depuis v1-legacy »).
 - L'adresse d'écoute de l'application est la variable `APP_HOST` (défaut `0.0.0.0` dans le conteneur, ce qui est nécessaire en mode bridge ; l'exposition reste limitée par `127.0.0.1:8000:8000`). Docker Desktop : rien à changer.
+
+### Mettre à jour depuis v1-legacy : réindexation nécessaire (lot 4b)
+
+**Votre index existant sera déclaré « incompatible » après la mise à jour, et vous devrez réindexer vos documents.** C'est voulu : l'application écrit désormais un fichier `index_meta.json` à côté de l'index (version du format, modèle et dimension d'embedding, versions de `langchain-core` et de `faiss-cpu`). Un index sans ce fichier, ou créé avec d'autres versions ou un autre modèle d'embedding, n'est plus chargé : son format interne (pickle) n'est pas garanti d'une version à l'autre, et les prochaines mises à jour de LangChain le casseraient.
+
+**Rien n'est supprimé ni réindexé automatiquement.** L'index reste intact sur le volume `family-rag-index` tant que vous n'avez pas lancé vous-même une indexation.
+
+1. **Sauvegardez le volume** avant la mise à jour (voir la section « Sauvegarde » de [MANAGE.md](MANAGE.md)) :
+   ```bash
+   docker run --rm -v family-rag-index:/source:ro -v "$(pwd)/backups":/backup      alpine tar czf /backup/index-avant-maj.tar.gz -C /source .
+   ```
+2. Mettez à jour et reconstruisez : `docker compose up -d --build` (sous Linux, ajoutez `-f docker-compose.linux.yml`).
+3. Ouvrez l'interface : un bandeau orange « Index incompatible : ré-indexation requise » s'affiche dans l'onglet Documents, et `/api/stats` renvoie `"status": "incompatible"` avec une explication. Une question posée à ce stade reçoit le même message au lieu d'une erreur.
+4. Cliquez sur **Indexer**. Quand l'indexation réussit, l'index est reconstruit et le bandeau disparaît. Si elle échoue (Ollama arrêté, par exemple), l'ancien index n'est pas touché.
+5. En cas de problème, restaurez la sauvegarde (voir MANAGE.md) et revenez à la version précédente.
+
+**Changer de modèle d'embedding** (réglages) ne supprime plus l'index non plus : il est déclaré incompatible jusqu'à la réindexation, et redevient utilisable si vous revenez au modèle d'origine. Le modèle choisi dans l'interface n'est toujours pas mémorisé après un redémarrage (il revient à la valeur de `.env`).
 
 ---
 

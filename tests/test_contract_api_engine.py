@@ -70,7 +70,7 @@ class TestIndexingFlow:
 
     def test_stats_reflect_the_index_and_settings(self, indexed_client):
         stats = indexed_client.get("/api/stats").json()
-        assert stats["index"] == {"exists": True, "total_documents": 2, "total_chunks": 2}
+        assert stats["index"] == {"exists": True, "total_documents": 2, "total_chunks": 2, "status": "ok", "message": None}
         assert stats["settings"]["llm_model"] == "fake-llm"
         assert stats["settings"]["embedding_model"] == "fake-embed"
 

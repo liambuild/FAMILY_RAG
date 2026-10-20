@@ -189,7 +189,9 @@ async def get_stats():
         "index": {
             "exists": stats.index_exists,
             "total_documents": stats.total_documents,
-            "total_chunks": stats.total_chunks
+            "total_chunks": stats.total_chunks,
+            "status": stats.status,
+            "message": stats.message
         },
         "settings": {
             "embedding_model": settings.embedding_model,

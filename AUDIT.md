@@ -298,7 +298,7 @@ Principe : **stabilité d'abord**. Je ne propose un remplacement que lorsqu'il r
 | 3 ✅ | `lot-3` | pypdf, Pillow, jinja2, python-docx, psutil | 2 | 1 h |
 | 4 ✅ | `lot-4` | fastapi, starlette, uvicorn, pydantic, image `python:3.11.17-slim-trixie` | 3 | 1–2 h |
 | 4b ✅ | `lot-4b` | `index_meta.json`, détection d'incompatibilité, README « Mettre à jour depuis v1-legacy » | 4 | 1 session |
-| 5 | `lot-5` | Migration LangChain 1.x | **⛔ 4b fusionné** | 1 session |
+| 5 ✅ | `lot-5` | Migration LangChain 1.x | **⛔ 4b fusionné** | 1 session |
 | 6 | `lot-6` | F2, F12, F13, F14 | 5 | 1 session |
 | 7 | `lot-7` | F3, F4 (`NUM_CTX`), F5, F6 | 6 | 1 session |
 | 7b | `lot-7b` | `settings.json`, l'interface l'emporte sur `.env` | 4b | 1 session |
@@ -374,10 +374,13 @@ Les tests de caractérisation qui figent un comportement corrigé plus tard port
 - README : section « Mettre à jour depuis v1-legacy » (sauvegarde conseillée du volume `family-rag-index`, réindexation).
 - *Note de fin de lot.* Choix : l'égalité des versions de `langchain-core` et de `faiss-cpu` est **exacte** (D2 : « différent de ce qu'attend le code ») ; tout changement de ces paquets, y compris un patch, rend les index existants incompatibles. Le lot 5 les change donc : les index créés au lot 4b devront être reconstruits une fois de plus. Les noms de modèles sont comparés sans le tag implicite `:latest`. F8 reste ouvert pour sa seconde moitié (modèle choisi non persisté après redémarrage, lot 7b). Tests : `tests/test_index_compat.py`. Non vérifié dans un navigateur : le bandeau de l'interface (HTML Alpine) n'est couvert que par les tests de l'API qui l'alimente.
 
-### Lot 5 — Migration LangChain 1.x
+### Lot 5 — Migration LangChain 1.x ✅ Fait
 - **⛔ Prérequis bloquant : lot 4b fusionné dans `modernisation`** (DECISIONS.md, D12).
 - Imports `langchain_core.documents`, `langchain_core.prompts` et `langchain_text_splitters` ; retrait de `langchain` ; langchain-community 0.4.2, langchain-ollama 1.1.0, faiss-cpu 1.15.1.
 - Un index `v1-legacy` est signalé incompatible, jamais supprimé.
+- *Note de fin de lot (versions revérifiées le 20/10/2026 sur PyPI et OSV).* 0 avis OSV sur chaque version retenue et sur les dépendances résolues vérifiées (aiohttp, SQLAlchemy, langsmith, requests, orjson, urllib3, ollama, numpy). Choix : **langchain-core 1.6.10** (plan ; 1.6.12 existe depuis le 16/10, non retenue) ; **langchain-core et langchain-text-splitters sont désormais épinglés explicitement** (l'application les importe directement et `index_meta.json` compare la version de langchain-core) ; **numpy épinglé à 2.4.6** : sans cela, un build neuf résout 2.4.6 alors que l'environnement de test restait en 1.26.4 (la contrainte `<2` de langchain 0.3 disparaît). `langchain-community` 0.4.2 tire `langchain-classic`, SQLAlchemy et aiohttp (prévu par l'audit).
+- **Vérifié** : suite de tests dans un environnement recréé de zéro à partir des fichiers requirements ; `pip check` ; build de l'image ; dans l'image, avec un faux serveur Ollama local (protocole `/api/embed` et `/api/chat` en flux) : indexation du corpus `eval/`, requête, compteurs d'usage lus par `eval/run_eval.py`, redémarrage avec rechargement de l'index. **Non vérifié : un vrai Ollama** (aucun n'est disponible ici) ; seul son protocole a été simulé.
+- **Hors lot, à décider.** `langchain-community` affiche un avertissement : le paquet est en cours d'abandon (« sunset ») au profit de paquets d'intégration autonomes. Il ne sert ici qu'à `FAISS`. Un paquet `langchain-faiss` (0.1.1) existe sur PyPI mais est très jeune ; l'adopter ajouterait une dépendance et changerait peut-être le format de l'index : à proposer, non fait. À surveiller avant de figer la suite du plan.
 
 ### Lot 6 — Corrections du splitter
 - F2, F12, F13, F14. Les `xfail` correspondants du lot 1 passent au vert. Mesure via le lot 1b.

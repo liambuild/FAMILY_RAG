@@ -4,10 +4,12 @@ starlette==1.8.0  # transitif de fastapi, épinglé pour les correctifs de sécu
 uvicorn[standard]==0.54.0
 
 # RAG
-langchain==0.3.14
-langchain-community==0.3.14
-langchain-ollama==0.2.2
-faiss-cpu==1.9.0.post1
+langchain-core==1.6.10
+langchain-text-splitters==1.1.3
+langchain-community==0.4.2
+langchain-ollama==1.1.0
+faiss-cpu==1.15.1
+numpy==2.4.6  # transitif (faiss-cpu, langchain-community), épinglé pour un build reproductible
 
 # Document loaders
 pypdf==6.20.1
